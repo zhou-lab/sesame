@@ -4,6 +4,8 @@
 #   make asan       build with ASan/UBSan
 #   make test       run the golden tests (needs an R with sesame; override the
 #                   binary with RSCRIPT=, e.g. make test RSCRIPT=Rscript-4.6.0)
+#   make test-docs  run every documented example against the built binary
+#                   (needs the store + test IDATs; not part of `make test`)
 #   make clean
 
 CC      ?= cc
@@ -51,7 +53,7 @@ OBJ     := $(SRC:.c=.o)
 CLI_OBJ := $(CLI_SRC:.c=.o)
 BIN     := sesame
 
-.PHONY: all asan test test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-attach test-cnv test-cbs test-vcf test-deidentify index cnv-normals registry yame-lib install fuzz fuzz-replay clean
+.PHONY: all asan test test-docs test-docs-check test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-attach test-cnv test-cbs test-vcf test-deidentify index cnv-normals registry yame-lib install fuzz fuzz-replay clean
 
 all: $(BIN)
 
@@ -117,10 +119,27 @@ asan: clean
 	$(MAKE) EXTRA_CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
 	        EXTRA_LDFLAGS="-fsanitize=address,undefined"
 
-test: test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-attach test-cnv test-cbs test-vcf test-deidentify
+test: test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-attach test-cnv test-cbs test-vcf test-deidentify test-docs-check
 
 test-idat: $(BIN)
 	@tests/run_golden.sh
+
+# The docs gate, cheap half: every version, subcommand, flag and metric count
+# the docs print, checked against THIS binary. No data, no network, under a
+# second -- so it rides along in `make test` and in CI. It exists because a
+# 2026-09 doc review ran the page verbatim and found nine printed lines that
+# fail as printed; a deprecated flag and a wrong metric count are exactly what
+# this catches.
+test-docs-check: $(BIN)
+	@python3 tests/docs_gate.py --consistency
+
+# The documented-workflow gate: every docs/examples/*.sh run against this
+# checkout's binary, in a sandbox, as a reader would. It needs a populated
+# $$YAME_DATA_HOME and test IDATs at $$SESAME_TEST_IDATS, so it is NOT part of
+# `make test` and never runs in CI or a conda build. On the HPC run it under
+# sbatch (release SOP step 5). Skips cleanly when either input is absent.
+test-docs: $(BIN)
+	@python3 tests/docs_gate.py
 
 test-betas: $(BIN) pipeline_dump
 	@tests/run_betas.sh

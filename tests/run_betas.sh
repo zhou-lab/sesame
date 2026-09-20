@@ -19,6 +19,13 @@ trap 'rm -rf "$work"' EXIT
 
 [ -x "$bin" ] || { echo "FAIL: $bin not built"; exit 1; }
 [ -x "$dump" ] || { echo "FAIL: $dump not built"; exit 1; }
+
+## Every driver SKIPs rather than fails when a prerequisite is absent: a
+## missing oracle is "not measured here", not a regression, and one driver
+## exiting non-zero stops `make test` dead for the targets after it.
+command -v "$RSCRIPT" >/dev/null 2>&1 || { echo "SKIP betas: no $RSCRIPT"; exit 0; }
+"$RSCRIPT" -e 'quit(status = !requireNamespace("sesame", quietly = TRUE))' >/dev/null 2>&1 \
+    || { echo "SKIP betas: $RSCRIPT has no sesame -- the oracle must be the latest R/Bioc"; exit 0; }
 [ -d "$idats" ] || { echo "SKIP: $idats not found"; exit 0; }
 
 fail=0

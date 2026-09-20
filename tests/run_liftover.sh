@@ -33,8 +33,14 @@ command -v "$RSCRIPT" >/dev/null 2>&1 || { echo "SKIP mLiftOver: no Rscript"; ex
 
 find_ord() {   # echo the first existing ordering for platform $1
     for c in "$store/$1/$1.ordering.tsv.gz" "$root/testdata/$1.ordering.tsv.gz"; do
-        [ -f "$c" ] && { echo "$c"; return; }
+        [ -f "$c" ] && { echo "$c"; return 0; }
     done
+    ## Explicitly 0: without it the last failed `[ -f ]` is this function's
+    ## status, and `so=$(find_ord ...)` then kills the script under `set -e` --
+    ## which is how `make test` aborted at test-liftover with no message and
+    ## skipped the twelve targets after it, instead of printing SKIP like every
+    ## other driver.
+    return 0
 }
 
 PASS=0; FAIL=0

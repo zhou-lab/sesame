@@ -4,6 +4,7 @@
 ![language](https://img.shields.io/badge/C-C11-00599C)
 ![arrays](https://img.shields.io/badge/arrays-EPIC%20%7C%20EPICv2%20%7C%20HM450%20%7C%20MSA-brightgreen)
 ![vs R](https://img.shields.io/badge/betas%20vs%20R-bit--identical-success)
+[![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fzwdzwd.github.io%2Fsesame-cli%2Fcoverage.json)](scripts/coverage.sh)
 
 Infinium DNA-methylation analysis as a single C binary — **IDAT → betas → QC,
 differential methylation, and copy number** — with no R and no Bioconductor. A
@@ -521,11 +522,22 @@ run under ASan/UBSan.
 
 ```sh
 make                # build ./sesame
-make test           # the full golden ladder vs the R oracle
+make test           # the full golden ladder vs the R oracle (+ the docs check)
+make test-docs      # run every documented example against the built binary
+make test-docs-check# versions/subcommands/flags/metric counts vs the binary
+scripts/coverage.sh # gcov line coverage of `make test` over src/ and cli/
 make asan           # rebuild under ASan + UBSan
 make fuzz-replay    # replay the IDAT-parser corpus under ASan/UBSan
 make clean
 ```
+
+`make test-docs` runs `docs/examples/*.sh` — the page's own commands, in a
+sandbox, on this checkout's binary. It needs the store and the test IDATs, so
+it is not part of `make test` and never runs in CI. `make test-docs-check`
+needs neither and does: it is what fails when a doc quotes a flag the binary
+does not have. Releases follow the
+[release SOP](https://github.com/zhou-lab/labjournal) entry beside the project
+org (`20210109_sesame_cli_RELEASE_SOP.md`).
 
 `make test` needs `Rscript` with the sesame R package (the oracle) and test IDATs
 at `$SESAME_TEST_IDATS`. Layout: `cli/` (the command), `src/` (`libsesame` — IDAT

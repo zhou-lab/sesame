@@ -8,7 +8,36 @@ on:
     branches: [main]
 
 jobs:
+  # The suite, on a bare runner. Nothing here has the R oracle, the private
+  # test IDATs or a populated store, so every data-backed target SKIPs -- and
+  # that is the point: it proves the binary builds, that every driver is
+  # well-formed and skips cleanly rather than dying (which is how `make test`
+  # once aborted at test-liftover and silently dropped the twelve targets
+  # after it), and that the docs still describe this binary. The numeric gates
+  # and the coverage measurement need the oracle, so they belong to the
+  # release SOP, run on the HPC, not to CI.
+  selftest:
+    name: selftest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build deps
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+
+      - name: Build
+        run: make -j4
+
+      - name: Suite (everything data-backed SKIPs; a driver that dies fails)
+        run: make test
+
+      - name: Docs gate
+        run: make test-docs-check
+
   build:
+    needs: selftest
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
