@@ -42,8 +42,11 @@ requirements:
     # sesame no longer downloads anything -- `yame fetch` fills the shared store
     # it reads, so yame is a real runtime dependency now. The floor is the yame
     # this was built against: that is the one whose catalog fixes the annotation
-    # tags compiled into src/registry.h.
-    - yame >=1.33
+    # tags compiled into src/registry.h. From v1.50 the fetch address is the
+    # store path (`yame fetch -y EPICv2`), which is what our error messages
+    # print; the older `InfiniumAnnotation/EPICv2` spelling stops resolving in
+    # v1.52, so the floor is not cosmetic.
+    - yame >=1.51
 
 test:
   commands:

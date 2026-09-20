@@ -63,7 +63,7 @@ build expects.
 ```sh
 # 1. one-time: fetch a platform's annotation (ordering + mask + coords + SNP)
 #    with yame, which owns downloading for the whole tool suite
-yame fetch -y InfiniumAnnotation/EPICv2
+yame fetch -y EPICv2
 
 # 2. preprocess a cohort (default QCDPB) -> one indexed .cg per output + qc.tsv
 #    each arg is an IDAT prefix, or a directory searched recursively for pairs
@@ -75,7 +75,7 @@ sesame dml --betas out/beta.cg --index "$STORE/EPICv2/EPICv2.ordering.tsv.gz" \
            --meta samples.tsv --formula '~ group + age' > dml.tsv
 
 # 3b. copy number for a tumor sample (writes segments + bins)
-yame fetch -y genomes/hg38
+yame fetch -y hg38
 sesame preprocess --prep "" --raw-signal --output total_intensity --out t/ tumor
 sesame cnv --platform EPICv2 --normals EPICv2.cnvnormals.cg \
            t/total_intensity.cg out/segments.tsv out/bins.tsv
@@ -298,7 +298,7 @@ Ordering tables, masks, per-probe coordinates and SNP tables live in
 [`zhou-lab/InfiniumAnnotation`](https://github.com/zhou-lab/InfiniumAnnotation),
 one folder per platform, versioned by **git tag**. **sesame does not download
 them** — [`yame`](https://github.com/zhou-lab/YAME) owns fetching for the whole
-tool suite, and `yame fetch InfiniumAnnotation/EPICv2` mirrors that folder into
+tool suite, and `yame fetch -y EPICv2` mirrors that folder into
 the shared **store**:
 
 ```
@@ -318,8 +318,8 @@ serve sesame, kycg and yame at once. Note it is not the same string as the
 fetch address: `yame fetch` names a unit `<source>/<target>`, because one
 store directory can be filled from more than one upstream (`<store>/hg38`
 holds the genome annotation, and `<store>/hg38/KYCG` kycg's sets). Genome-level annotation comes the same way from
-[`zhou-lab/genomes`](https://github.com/zhou-lab/genomes) via `yame fetch
-genomes/hg38` (hg38, mm10, mm39 published); it drives CNV binning, the CNV
+[`zhou-lab/genomes`](https://github.com/zhou-lab/genomes) via `yame fetch -y
+hg38` (hg38, mm10, mm39 published); it drives CNV binning, the CNV
 ideogram, and `region --gene`.
 
 **Store location:** `$YAME_DATA_HOME`, else

@@ -35,8 +35,8 @@ YAME it was built against, and the store path in use.
 
 ## Assets and the store
 
-  yame fetch -y InfiniumAnnotation/EPICv2   # ordering + mask + coords + snp
-  yame fetch -y genomes/hg38                # seqinfo, gaps, cytoband, genes
+  yame fetch -y EPICv2      # ordering + mask + coords + snp
+  yame fetch -y hg38        # seqinfo, gaps, cytoband, genes (+ the suite's .cr)
 
 `-y` is not optional off a terminal: without it yame prints the plan and
 refuses ("Refusing to fetch N files ... Re-run with -y").
@@ -52,8 +52,11 @@ lookup `<store>/<platform>/<file>` -> `./<file>` runs only then.
 Per platform, at `<store>/<P>/`: `<P>.ordering.tsv.gz`,
 `<P>.<genome>.mask.cm(+.idx)`, `<P>.<genome>.coord.tsv.gz`,
 `<P>.<genome>.snp.tsv.gz`, `<P>.typeI_ext.tsv.gz`, `SHA256SUMS`. Genome tracks
-land at `<store>/<build>/` (the fetch TARGET is `genomes/hg38`, the store PATH
-is `hg38/`).
+land at `<store>/<build>/`. From yame v1.50 the fetch address IS the store
+path, and a directory address is that directory's own files: `yame fetch -y
+hg38` is the genome directory, which also carries the suite's ~30 MB
+coordinate stream (`cpg_nocontig.cr`) that sesame never opens. The pre-1.50
+`genomes/hg38` spelling works through v1.51 only.
 
 Downloads are digest-verified; `shasum -a 256 -c SHA256SUMS` re-checks by hand.
 

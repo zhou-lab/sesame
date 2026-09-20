@@ -70,8 +70,13 @@
  * but the STORE is keyed on the target alone -- the browser hierarchy the
  * user navigates, species then platform. So the fetch address and the store
  * path are not the same string, and only the latter belongs in a path. */
-#define SESAME_IA_SRC      "InfiniumAnnotation"   /* fetch address only */
-#define SESAME_GENOME_SRC  "genomes"              /* fetch address only */
+/* From YAME v1.50 the fetch address is the store path, and a directory
+ * address is that directory's own files: `yame fetch -y EPICv2` is the six
+ * platform files, `yame fetch -y hg38` the genome directory (which also
+ * carries the suite's coordinate stream, ~30 MB sesame never opens). The
+ * pre-1.50 `InfiniumAnnotation/EPICv2` spelling resolves as an alias for one
+ * release. -y is not optional: without it yame refuses off a terminal, which
+ * is exactly where a printed fix has to work. */
 
 static int is_file(const char *p)
 {
@@ -84,6 +89,16 @@ const sesame_reg_t *sesame__reg_for_platform(const char *platform)
     for (const sesame_reg_t *r = SESAME_REGISTRY; r->platform; r++)
         if (strcmp(r->platform, platform) == 0) return r;
     return NULL;
+}
+
+/* The catalog tag this build expects for a genome build; "the pinned tag"
+ * when the build is not one we carry. */
+static const char *sesame__genome_tag(const char *genome)
+{
+    if (!genome) return "the pinned tag";
+    for (const sesame_genome_reg_t *g = SESAME_GENOMES; g->genome; g++)
+        if (strcmp(g->genome, genome) == 0) return g->tag;
+    return "the pinned tag";
 }
 
 const char *sesame_platform_from_beads(int32_t beads)
@@ -227,13 +242,12 @@ void sesame_index_missing_help(const char *platform, char *msg, size_t n)
         "    %s/%s/%s\n"
         "    ./%s.ordering.tsv.gz\n"
         "  fix, any of:\n"
-        "    yame fetch " SESAME_IA_SRC "/%s   (this build expects tag %s)\n"
-        "    sesame betas --index <path> ...\n"
+        "    yame fetch -y %s   (this build expects %s)\n"
         "    export YAME_DATA_HOME=<dir>",
         platform,
         dir, platform, reg ? reg->ordering : "<platform>.ordering.tsv.gz",
         platform,
-        platform, SESAME_DEFAULT_TAG);
+        platform, reg ? reg->tag : "the pinned tag");
 }
 
 /* Same, for a per-platform companion asset (coord table, SNP table, .cm mask):
@@ -241,14 +255,15 @@ void sesame_index_missing_help(const char *platform, char *msg, size_t n)
 void sesame_asset_missing_help(const char *platform, const char *file,
                                char *msg, size_t n)
 {
+    const sesame_reg_t *reg = sesame__reg_for_platform(platform);
     char dir[4096];
     sesame_store_dir(dir, sizeof dir);
     snprintf(msg, n,
         "no %s in the store for %s\n"
         "  searched: %s/%s/\n"
-        "  fix: yame fetch " SESAME_IA_SRC "/%s   (this build expects tag %s)",
+        "  fix: yame fetch -y %s   (this build expects %s)",
         file ? file : "asset", platform, dir, platform,
-        platform, SESAME_DEFAULT_TAG);
+        platform, reg ? reg->tag : "the pinned tag");
 }
 
 /* Genome-level annotation (seqinfo/gaps/cytoband/genes) from zhou-lab/genomes,
@@ -260,6 +275,6 @@ void sesame_genome_missing_help(const char *genome, char *msg, size_t n)
     snprintf(msg, n,
         "no genome annotation for %s in the store\n"
         "  searched: %s/%s/\n"
-        "  fix: yame fetch " SESAME_GENOME_SRC "/%s   (this build expects tag %s)",
-        genome, dir, genome, genome, SESAME_GENOME_TAG);
+        "  fix: yame fetch -y %s   (this build expects %s)",
+        genome, dir, genome, genome, sesame__genome_tag(genome));
 }

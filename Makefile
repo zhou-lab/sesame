@@ -58,11 +58,12 @@ BIN     := sesame
 all: $(BIN)
 
 # src/registry.h is a projection of YAME's shared catalog (YAME/tools/registry),
-# which is where the asset tags now live -- sesame no longer pins its own. It
+# emitted by OUR generator against the catalog's lib.sh -- YAME dropped its
+# --tool= flag in v1.50, and each tool now owns its emitter. It
 # supplies the IDAT bead counts for platform auto-detection and the tag this
 # build expects, quoted in the "asset missing" messages. Emission is offline.
 registry:
-	bash $(YAME_DIR)/tools/make_registry.sh --tool=sesame -o src/registry.h
+	bash tools/make_registry.sh -o src/registry.h
 
 # Install the binary into $(PREFIX)/bin (honours $(DESTDIR)). Used by the conda
 # recipe; `make install PREFIX=/usr/local` for a manual install.
