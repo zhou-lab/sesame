@@ -198,8 +198,8 @@
             aria-label="Copy a prompt for your coding agent"><span class="ico"></span>agent prompt</button>
     <span class="install">
       <button id="install-btn" type="button"
-              data-cmd="conda install -c zhou-lab -c conda-forge sesame"
-              title="conda install -c zhou-lab -c conda-forge sesame — click to copy"><span class="ico"></span>conda install</button>
+              data-cmd="conda install -c zhou-lab -c conda-forge sesame yame"
+              title="conda install -c zhou-lab -c conda-forge sesame yame — click to copy"><span class="ico"></span>conda install</button>
       <a class="ana" href="https://anaconda.org/zhou-lab/sesame"
          title="anaconda.org/zhou-lab/sesame" rel="noopener">↗</a>
     </span>
@@ -238,23 +238,30 @@
 
   <section class="card">
     <h2>Install &amp; fetch <span class="m">— then fully offline</span></h2>
-    <pre><code><span class="cm"># build from source (conda install is up top)</span>
+    <pre><code><span class="cm"># the toolchain (sesame + yame is enough to run)</span>
+conda install -c zhou-lab -c conda-forge \
+  sesame yame cinderplot tabl
+
+<span class="cm"># or build sesame from source</span>
 git clone --recurse-submodules \
   https://github.com/zwdzwd/sesame-cli
 cd sesame-cli &amp;&amp; make
 
-<span class="cm"># one-time: annotation into the shared store (yame downloads)</span>
-yame <span class="sub">fetch</span> InfiniumAnnotation/EPICv2
-yame <span class="sub">fetch</span> genomes/hg38</code></pre>
+<span class="cm"># one-time: annotation into the shared store</span>
+<span class="cm"># -y is required off a terminal; it refuses without</span>
+yame <span class="sub">fetch</span> -y InfiniumAnnotation/EPICv2
+yame <span class="sub">fetch</span> -y genomes/hg38</code></pre>
     <p style="margin-top:11px">…builds a local, digest-verified store
       (<code class="inl">$YAME_DATA_HOME</code>, default <code class="inl">~/.local/share/yame</code>) —
       offline from here on:</p>
     <pre><code>EPICv2/  <span class="cm"># probe annotation</span>
 ├ EPICv2.ordering.tsv.gz
-├ EPICv2.hg38.mask.cm
+├ EPICv2.hg38.mask.cm(+.idx)
 ├ EPICv2.hg38.coord.tsv.gz
+├ EPICv2.hg38.snp.tsv.gz
+├ EPICv2.typeI_ext.tsv.gz
 └ SHA256SUMS
-genome/hg38/  <span class="cm"># genome tracks</span>
+hg38/  <span class="cm"># genome tracks</span>
 ├ seqinfo.tsv.gz  gaps.tsv.gz
 ├ cytoband.tsv.gz  genes.bed.gz(+.tbi)
 └ SHA256SUMS</code></pre>
@@ -277,7 +284,7 @@ sesame <span class="sub">preprocess</span> --output beta --out out/ \
 ├ intensity.cg (+.idx)     <span class="cm"># M/U (fmt3)</span>
 ├ pval.cg (+.idx)          <span class="cm"># detection p</span>
 └ qc.tsv                   <span class="cm"># QC metrics</span></code></pre>
-    <p style="margin-top:11px"><b>qc.tsv</b> holds 65 per-sample metrics.
+    <p style="margin-top:11px"><b>qc.tsv</b> holds 66 per-sample metrics.
       <code class="inl">frac_dt</code> — the fraction of probes above detection —
       is the most critical for assessing data quality (also per type,
       <code class="inl">frac_dt_cg/_ch/_rs</code>).</p>
@@ -297,7 +304,7 @@ sampleB   0.994    0.995       1.00</code></pre>
         <div class="code"><pre><code><span class="cm"># betas -> a 1-D density (bimodal)</span>
 yame unpack beta.cg | cinderplot --no-header \
   'aes(V1) + geom_density()
-   + theme_minimal() + labs(x="beta")'</code></pre></div>
+   + theme_minimal() + labs(x="beta")' beta_density.png</code></pre></div>
       </div>
       <figcaption>GM12878 betas — the classic bimodal shape: unmethylated (~0) and methylated (~1).</figcaption>
     </figure>
@@ -324,7 +331,8 @@ $ sesame <span class="sub">attach-probe</span> --platform EPICv2 out/beta.cg
     <h2>Peek at a raw IDAT <span class="m">— idat-dump</span></h2>
     <p>The bead-level record as Illumina wrote it, before any of it becomes a probe.</p>
     <pre><code>$ sesame <span class="sub">idat-dump</span> --tsv sample_Grn.idat.gz
-address    mean  sd   nbeads
+<span class="cm"># rows only: addr, mean, sd, nbeads. The header</span>
+<span class="cm"># belongs to the summary form (no --tsv).</span>
 10600313   4821  118  12
 10600322   287   34   9</code></pre>
   </section>
@@ -372,7 +380,7 @@ sesame <span class="sub">attach-probe</span> qc/intensity.cg qc/beta.cg \
 | <b>tabl</b> bin2d -x logint -y beta -nx 180 -ny 140 --xlim 5,15 --ylim 0,1 \
 | <b>tabl</b> mutate 'density=log10(n+1)' &gt; qc/ib.tsv
 
-cinderplot 'ib.tsv + aes(x, y, colour=density) + geom_point(size=0.7)
+cinderplot 'qc/ib.tsv + aes(x, y, colour=density) + geom_point(size=0.7)
   + geom_hline(yintercept=0.5, colour="grey30") + scale_colour_viridis()
   + labs(x="Total intensity  log2(M+U)", y="beta")' ib.png --size 5.5x4.5</code></pre></div>
       </div>
@@ -385,8 +393,14 @@ cinderplot 'ib.tsv + aes(x, y, colour=density) + geom_point(size=0.7)
   <section class="card">
     <h2>Differential methylation <span class="m">— dml</span></h2>
     <p>Per-probe OLS with t/F tests + BH, matching R's <code class="inl">lm</code> to ~1e-9.</p>
+    <p><code class="inl">dml</code> is the one command that takes no
+      <code class="inl">--platform</code>: a <code class="inl">.cg</code> is
+      positional, so it needs the ordering itself, by path
+      (<code class="inl">$STORE</code> = <code class="inl">$YAME_DATA_HOME</code>).
+      It still prints a deprecation notice for <code class="inl">--index</code>,
+      which is the only flag it has — the rename has not reached it.</p>
     <pre><code>sesame <span class="sub">dml</span> --betas out/beta.cg \
-  --index EPICv2.ordering.tsv.gz \
+  --index $STORE/EPICv2/EPICv2.ordering.tsv.gz \
   --meta samples.tsv \
   --formula '~ group + age' &gt; dml.tsv</code></pre>
   </section>
@@ -410,8 +424,13 @@ sesame <span class="sub">deidentify</span> -r --seed 42 s_noid.idat</code></pre>
     <pre><code>sesame <span class="sub">preprocess</span> --prep "" --raw-signal \
   --output total_intensity --out t/ tumor
 sesame <span class="sub">cnv</span> --platform EPICv2 \
+  --normals EPICv2.cnvnormals.cg \
   t/total_intensity.cg segments.tsv bins.tsv
 <span class="cm"># --probes: per-probe; --exclude chrY</span></code></pre>
+    <p style="margin-top:11px"><b><code class="inl">--normals</code> is yours to
+      supply.</b> The normal panel is not published with the annotation, so no
+      fetch brings it: build one with <code class="inl">make cnv-normals</code>
+      or point the flag at your own.</p>
     <figure>
       <div class="shot" tabindex="0">
         <img src="figures/cnv_k562.png" alt="K562 copy-number profile from sesame <span class="sub">cnv</span>">
@@ -423,7 +442,7 @@ cinderplot 'out/bins.tsv
   + geom_segment(data="out/segments.tsv", y=seg.mean, color="black")
   + scale_x_genome("hg38/seqinfo.tsv.gz")
   + scale_colour_gradient2(low="#762a83", high="#b2182b")
-  + ideogram("hg38/cytoband.tsv.gz")'</code></pre></div>
+  + ideogram("hg38/cytoband.tsv.gz")' cnv_k562.png</code></pre></div>
       </div>
       <figcaption>K562 (EPICv2/hg38): chr9p deletion, chr13/22 amps.</figcaption>
     </figure>
@@ -432,8 +451,10 @@ cinderplot 'out/bins.tsv
   <section class="card">
     <h2>Genotype SNPs → VCF <span class="m">— vcf</span></h2>
     <p>SNP (<code class="inl">rs</code>) probes → VCF (<code class="inl">formatVCF</code>); GT + fractions exact vs R.</p>
-    <pre><code>sesame <span class="sub">vcf</span> tumor --platform EPICv2 \
-  --snp EPICv2.hg38.snp.tsv.gz &gt; geno.vcf
+    <pre><code>sesame <span class="sub">vcf</span> tumor --platform EPICv2 &gt; geno.vcf
+<span class="cm"># the SNP table comes from the store. --snp</span>
+<span class="cm"># overrides it, and is a path -- a bare</span>
+<span class="cm"># filename is not looked up in the store.</span>
 <span class="cm"># --variants: only rs + channel-switch</span></code></pre>
   </section>
 
@@ -450,7 +471,7 @@ cinderplot 'out/bins.tsv
 | cinderplot 'region()
   + cytoband("hg38/cytoband.tsv.gz", height=.5)
   + genes("hg38/genes.bed.gz", height=1.5)
-  + matrix(-, cluster=samples, rownames=off)'</code></pre></div>
+  + matrix(-, cluster=samples, rownames=off)' dnmt3a.png</code></pre></div>
       </div>
       <figcaption><b>--gene DNMT3A</b> — gene models + probe-anchored heatmap.</figcaption>
     </figure>
@@ -460,7 +481,7 @@ cinderplot 'out/bins.tsv
         <button class="zoom" type="button" data-full="figures/region_hoxa.png" title="expand">⤢</button>
         <div class="code"><pre><code>sesame <span class="sub">region</span> <span class="cm">chr7:27,090,000-27,210,000</span> \
   --betas cohort.beta.cg --platform EPICv2 \
-| cinderplot 'region()+genes()+matrix(-)'</code></pre></div>
+| cinderplot 'region()+genes()+matrix(-)' hoxa.png</code></pre></div>
       </div>
       <figcaption><b>chr:beg-end</b> — the HOXA cluster.</figcaption>
     </figure>
@@ -524,7 +545,7 @@ sesame <span class="sub">impute</span> --method neighbors \
     <pre><code>Probe_ID           M         U         col
 cg00000029_TC21    NA        41791408  2
 cg00000769_BC11    26756338  59799309  G
-ctl_1060944_NEG    NA        10609447  2</code></pre>
+ctl_10609447_NEGATIVE  NA  10609447  2</code></pre>
     <p style="margin-top:11px">Four columns and nothing else — <b>not</b> the
       Illumina/sesame manifest with tabs instead of commas. <code class="inl">M</code>
       is the methylated bead address (Illumina <code class="inl">AddressB_ID</code>,
@@ -558,9 +579,11 @@ sesame <span class="sub">preprocess</span> --platform EPICv2 --out out/ idats/
 sesame <span class="sub">preprocess</span> --platform MyArray.ordering.csv \
   --mask MyArray.mask.cm --prep QCDPB --out out/ idats/
 
-<span class="cm"># without --mask, prep C or "" work; Q/P/B need one</span>
+<span class="cm"># no mask: prep C or "", and betas only -- the</span>
+<span class="cm"># default --output carries pval and qc, which</span>
+<span class="cm"># need a mask whatever the prep</span>
 sesame <span class="sub">preprocess</span> --platform MyArray.ordering.csv \
-  --prep C --out out/ idats/</code></pre>
+  --prep C --output beta --out out/ idats/</code></pre>
     <p style="margin-top:11px">Overrides: <code class="inl">--mask</code>
       <code class="inl">--coords</code> <code class="inl">--snp</code>
       <code class="inl">--normals</code>. From an Illumina manifest the ordering is a
@@ -577,7 +600,9 @@ sesame <span class="sub">preprocess</span> --platform MyArray.ordering.csv \
       the same order — 1 means drop the probe. Write the column, pack it, name the
       track:</p>
     <pre><code><span class="cm"># one 0/1 per ordering row, in the ordering's order</span>
-awk -F'\t' 'NR&gt;1{print (bad) ? 1 : 0}' \
+<span class="cm"># replace the condition -- an undefined name is</span>
+<span class="cm"># 0 to awk, so this masks nothing at all</span>
+awk -F'\t' 'NR&gt;1{print ($1 ~ /^ctl_/) ? 1 : 0}' \
   MyArray.ordering.csv &gt; m.txt
 
 yame pack -f b m.txt MyArray.mask.cm   <span class="cm"># b = bitset</span>

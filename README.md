@@ -22,7 +22,7 @@ standalone reimplementation of [sesame](https://github.com/zwdzwd/sesame) /
 - **Preprocess to betas** — the full `QCDPB` pipeline (qualityMask,
   inferInfiniumIChannel, dyeBiasNL, pOOBAH, noob); `prep=""` betas are
   bit-identical to R, the rest match to documented tolerances.
-- **QC** — the 65-metric `sesameQC` panel, one row per sample.
+- **QC** — the 66-metric `sesameQC` panel, one row per sample.
 - **Differential methylation** — per-probe OLS with t/F tests and BH adjustment
   (`DML`), matching R's `lm` to ~1e-9.
 - **Copy number** — log2 ratios vs a normal panel, genome binning, and a
@@ -39,7 +39,7 @@ Arrays: **EPIC, EPICv2, HM450, MSA**. Outputs are [YAME](https://github.com/zhou
 
 ```sh
 # conda (recommended) — the package is `sesame`; deps are zlib, libcurl and yame
-conda install -c zhou-lab -c conda-forge sesame
+conda install -c zhou-lab -c conda-forge sesame yame
 ```
 
 Or build from source (a C compiler + `make`, `zlib`, `libcurl`, and the bundled
@@ -62,7 +62,7 @@ build expects.
 ```sh
 # 1. one-time: fetch a platform's annotation (ordering + mask + coords + SNP)
 #    with yame, which owns downloading for the whole tool suite
-yame fetch InfiniumAnnotation/EPICv2
+yame fetch -y InfiniumAnnotation/EPICv2
 
 # 2. preprocess a cohort (default QCDPB) -> one indexed .cg per output + qc.tsv
 #    each arg is an IDAT prefix, or a directory searched recursively for pairs
@@ -70,11 +70,11 @@ sesame preprocess --out out/ idats/
 #    -> out/beta.cg  out/intensity.cg  out/pval.cg  out/qc.tsv
 
 # 3a. differential methylation from the betas
-sesame dml --betas out/beta.cg --index EPICv2.ordering.tsv.gz \
+sesame dml --betas out/beta.cg --index "$STORE/EPICv2/EPICv2.ordering.tsv.gz" \
            --meta samples.tsv --formula '~ group + age' > dml.tsv
 
 # 3b. copy number for a tumor sample (writes segments + bins)
-yame fetch genomes/hg38
+yame fetch -y genomes/hg38
 sesame preprocess --prep "" --raw-signal --output total_intensity --out t/ tumor
 sesame cnv --platform EPICv2 --normals EPICv2.cnvnormals.cg \
            t/total_intensity.cg out/segments.tsv out/bins.tsv
@@ -118,7 +118,7 @@ one indexed file, one block per sample — into `--out DIR` (default `.`), plus 
 | `intensity` | `intensity.cg` | 3 — M/U integers (`yame` derives beta **and** coverage) |
 | `total_intensity` | `total_intensity.cg` | 4 — M+U float |
 | `pval` | `pval.cg` | 4 — pOOBAH detection p |
-| `qc` | `qc.tsv` | the 65-metric `sesameQC` panel, one row per sample |
+| `qc` | `qc.tsv` | the 66-metric `sesameQC` panel, one row per sample |
 
 Default `--output` is `beta,intensity,pval,qc`.
 
@@ -143,12 +143,14 @@ F-test per categorical variable, effect sizes, and BH-adjusted p-values — sesa
 `DML` / `summaryExtractTest`, as a TSV (one row per probe).
 
 ```sh
-sesame dml --betas out/beta.cg --index EPICv2.ordering.tsv.gz \
+sesame dml --betas out/beta.cg --index "$STORE/EPICv2/EPICv2.ordering.tsv.gz" \
            --meta samples.tsv --formula '~ group + age' > dml.tsv
 ```
 
 `--betas` is a `preprocess` `beta.cg` (with `--index <ordering>` to resolve probe
-IDs, since a `.cg` is positional) or a `Probe_ID` matrix TSV; `--meta`'s first
+IDs, since a `.cg` is positional; `dml` takes no `--platform` and does not look
+in the store, so give the ordering by path — and it still calls `--index`
+deprecated, which is the only flag it has) or a `Probe_ID` matrix TSV; `--meta`'s first
 column matches the sample names. `--formula` takes **main effects** (categorical
 columns auto-dummied to match R's `model.matrix` — treatment contrasts,
 alphabetical levels; continuous as-is, with an intercept). For interactions or
@@ -194,8 +196,8 @@ then a binomial model calls `0/0`, `0/1`, or `1/1` with a phred-like score in th
 `INFO` field.
 
 ```sh
-sesame vcf tumor --platform EPICv2 --snp EPICv2.hg38.snp.tsv.gz > geno.vcf
-sesame vcf tumor --platform EPICv2 --snp EPICv2.hg38.snp.tsv.gz --variants > geno.vcf
+sesame vcf tumor --platform EPICv2 > geno.vcf              # SNP table from the store
+sesame vcf tumor --platform EPICv2 --variants > geno.vcf   # informative probes only
 ```
 
 It uses the **raw** signal (channel inference would erase the Type-I channel-switch
@@ -323,8 +325,11 @@ ideogram, and `region --gene`.
 `${XDG_DATA_HOME:-~/.local/share}/yame` — one variable for the whole suite,
 because a shared store only dedupes if every tool agrees where it is. It is the
 *data* tier rather than a cache tier on purpose: these are large references that
-should survive somebody clearing `~/.cache`. **Asset lookup:** `--index` /
-`--coords` / `--normals` / `--snp` → `<store>/<platform>/` → `./`.
+should survive somebody clearing `~/.cache`. **Asset lookup:** an explicit `--index` /
+`--coords` / `--normals` / `--snp` is a **path**, used as given — there is no
+store lookup behind it, so a bare `--snp EPICv2.hg38.snp.tsv.gz` fails unless
+that file is in the working directory. Omit the flag and the chain
+`<store>/<platform>/<file>` → `./<file>` resolves it.
 
 **sesame has no network code at all** — it never downloads, never prompts (a
 prompt would hang a Nextflow job or Docker build silently), and never falls back
@@ -375,7 +380,9 @@ same order — 1 means drop the probe:
 
 ```sh
 # one 0/1 per ordering row
-awk -F'\t' 'NR>1{print (bad) ? 1 : 0}' MyArray.ordering.csv > m.txt
+# replace the condition -- an undefined name is 0 to awk, so this writes
+# a mask of all zeros that packs and indexes fine and masks nothing
+awk -F'\t' 'NR>1{print ($1 ~ /^ctl_/) ? 1 : 0}' MyArray.ordering.csv > m.txt
 
 yame pack -f b m.txt MyArray.mask.cm     # -f b = binary/bitset
 echo M_custom > names.txt
@@ -388,8 +395,11 @@ platform name*, so a file handed over without a name is ambiguous — it would
 have to union all 25, masking 111k probes where the recommended 5 mask 50k.
 sesame refuses and says so instead of guessing.
 
-Without `--mask`, a custom array can still run `--prep C` or `""`; `Q`, `P` and
-`B` need a mask. When a named platform ships more than one `.cm` (MM285 has mm10
+Without `--mask`, a custom array can still run `--prep C` or `""` — with
+`--output beta`. The prep code is not the whole rule: the default `--output`
+also asks for `pval` and `qc`, which need a mask whatever the prep, so
+`--prep C` alone still stops with "P/B/pval/qc need a mask". `Q`, `P` and `B`
+need one too. When a named platform ships more than one `.cm` (MM285 has mm10
 and mm39) the lexicographically first is used — deterministic, and mm10 for
 MM285 — but name `--mask` when the build matters.
 

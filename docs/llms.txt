@@ -16,7 +16,12 @@ other published orderings). Numeric outputs are YAME `.cg` files.
 
 ## Install
 
-  conda install -c zhou-lab -c conda-forge sesame
+  conda install -c zhou-lab -c conda-forge sesame yame
+
+Install `yame` alongside sesame: sesame links libyame statically, but the yame
+COMMAND is a separate package and is the only way to fill the store sesame
+reads. The docs examples also use `cinderplot` (plots) and `tabl` (TSV
+wrangling), both in the same channel.
 
 Source build needs a C compiler, make, zlib, libcurl and the bundled YAME
 submodule:
@@ -30,16 +35,26 @@ YAME it was built against, and the store path in use.
 
 ## Assets and the store
 
-  yame fetch InfiniumAnnotation/EPICv2      # ordering + mask + coords + snp
-  yame fetch genomes/hg38                   # seqinfo, gaps, cytoband, genes
+  yame fetch -y InfiniumAnnotation/EPICv2   # ordering + mask + coords + snp
+  yame fetch -y genomes/hg38                # seqinfo, gaps, cytoband, genes
+
+`-y` is not optional off a terminal: without it yame prints the plan and
+refuses ("Refusing to fetch N files ... Re-run with -y").
 
 Store root: `$YAME_DATA_HOME`, else `${XDG_DATA_HOME:-$HOME/.local/share}/yame`
 — one variable for the whole suite (yame, kycg, sesame share the store).
-Lookup order for an asset: explicit flag (`--index`/`--platform`, `--mask`,
-`--coords`, `--snp`, `--normals`) -> `<store>/<platform>/` -> `./`.
+An asset flag (`--mask`, `--coords`, `--snp`, `--normals`, `--index`) is a
+PATH, used literally with no store lookup behind it: `--snp
+EPICv2.hg38.snp.tsv.gz` fails unless that file is in the working directory,
+even when the store holds it. Omit the flag to get the store's copy; the
+lookup `<store>/<platform>/<file>` -> `./<file>` runs only then.
 
-Per platform: `<P>.ordering.tsv.gz`, `<P>.<genome>.mask.cm(+.idx)`,
-`<P>.<genome>.coord.tsv.gz`, `<P>.<genome>.snp.tsv.gz`, `SHA256SUMS`.
+Per platform, at `<store>/<P>/`: `<P>.ordering.tsv.gz`,
+`<P>.<genome>.mask.cm(+.idx)`, `<P>.<genome>.coord.tsv.gz`,
+`<P>.<genome>.snp.tsv.gz`, `<P>.typeI_ext.tsv.gz`, `SHA256SUMS`. Genome tracks
+land at `<store>/<build>/` (the fetch TARGET is `genomes/hg38`, the store PATH
+is `hg38/`).
+
 Downloads are digest-verified; `shasum -a 256 -c SHA256SUMS` re-checks by hand.
 
 Not published: the CNV normal panel `<P>.cnvnormals.cg`. Build one with
@@ -51,7 +66,8 @@ exact `yame fetch` to run — sesame never downloads and never prompts.
 ## Commands
 
   preprocess    IDAT -> .cg (+ qc.tsv); the main entry point
-  dml           per-probe OLS + t/F tests + BH -> TSV
+  dml           per-probe OLS + t/F tests + BH -> TSV; --index <ordering>
+                by PATH (no --platform, no store lookup)
   cnv           log2 vs a normal panel, genome binning, CBS segmentation
   vcf           rs probes -> sites-only VCF (formatVCF)
   mliftover     betas across platforms (mLiftOver)
@@ -75,15 +91,18 @@ sample, named by basename) plus `qc.tsv`. Default
   Q qualityMask   C inferInfiniumIChannel   D dyeBiasNL
   E dyeBiasL      P pOOBAH                  B noob
 `Q`, `P`, `B` read the `.cm` mask, so the platform must be in the store (or
-pass `--mask`). `--prep ""` gives raw betas, bit-identical to R.
+pass `--mask`). The prep code is not the whole rule: the default `--output`
+carries `pval` and `qc`, which need a mask whatever the prep — a mask-less
+custom array needs `--output beta` too. `--prep ""` gives raw betas,
+bit-identical to R.
 
 Other flags: `--platform`/`--index` (else auto-detected from bead count),
 `--raw-signal` (signal outputs from raw signal; what CNV wants), `--collapse`
 (average EPICv2/MSA replicates to the cg prefix), `--detection pneg`,
 `--threads`, `--min-beads`, `--tmp`.
 
-`qc.tsv` holds 65 metrics per sample; `frac_dt` (fraction of probes above
-detection) is the primary quality read-out.
+`qc.tsv` holds 66 metrics per sample (67 columns with `sample`); `frac_dt`
+(fraction of probes above detection) is the primary quality read-out.
 
 ## Formats
 
@@ -113,7 +132,9 @@ a projection of it. Row order is permanent: sorting or inserting re-labels every
 
 Mask: a `.cm` is a bitset, one bit per ordering row, 1 = drop.
 
-  awk -F'\t' 'NR>1{print (bad) ? 1 : 0}' MyArray.ordering.csv > m.txt
+  # replace the condition; an undefined awk name is 0, which writes a
+  # mask of all zeros that packs and indexes fine and masks nothing
+  awk -F'\t' 'NR>1{print ($1 ~ /^ctl_/) ? 1 : 0}' MyArray.ordering.csv > m.txt
   yame pack -f b m.txt MyArray.mask.cm
   echo M_custom > names.txt && yame index -s names.txt MyArray.mask.cm
 
@@ -130,8 +151,12 @@ Mask: a `.cm` is a bitset, one bit per ordering row, 1 = drop.
   order.
 - `vcf` uses RAW signal deliberately — channel inference would erase the
   Type-I channel-switch genotype.
-- `--index` is the deprecated old name for `--platform <ordering>`.
-- Exit codes: 0 ok, 1 runtime error or a failed sample, 2 usage error.
+- `--index` is the deprecated old name for `--platform <ordering>`; every run
+  that uses it prints a deprecation notice.
+- Exit codes: 0 ok, 1 everything else. Usage errors return 1 as well, so a
+  caller cannot tell a bad flag from a failed sample.
+- `idat-dump --tsv` prints rows only; the `address mean sd nbeads` header
+  belongs to the plain summary form.
 
 ## Fidelity
 
