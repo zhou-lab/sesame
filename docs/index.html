@@ -250,7 +250,11 @@ cd sesame-cli &amp;&amp; make
 <span class="cm"># one-time: annotation into the shared store</span>
 <span class="cm"># -y is required off a terminal; it refuses without</span>
 yame <span class="sub">fetch</span> -y EPICv2
-yame <span class="sub">fetch</span> -y hg38</code></pre>
+yame <span class="sub">fetch</span> -y hg38
+
+<span class="cm"># a name is that directory's own files. -R adds everything</span>
+<span class="cm"># beneath it (hg38/KYCG, hg38/models: 5.2 GB, mostly not</span>
+<span class="cm"># sesame's). -n -R hg38 shows what that reaches first.</span></code></pre>
     <p style="margin-top:11px">…builds a local, digest-verified store
       (<code class="inl">$YAME_DATA_HOME</code>, default <code class="inl">~/.local/share/yame</code>) —
       offline from here on:</p>

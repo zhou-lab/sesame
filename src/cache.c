@@ -176,12 +176,31 @@ int sesame_platform_is_path(const char *arg)
 int sesame_asset_locate(const char *platform, const char *file,
                         char *out, size_t n)
 {
-    char dir[4096];
+    char spec[4096], advice[1024];
+    const yame_asset_file_t *rec = NULL;
+    yame_store_state_t st;
 
     if (!platform || !file) return -1;
-    sesame_store_dir(dir, sizeof dir);
-    snprintf(out, n, "%s/%s/%s", dir, platform, file);
-    if (is_file(out)) { sesame_warn_if_stale(platform); return 0; }
+
+    /* One call resolves the path AND classifies it: CURRENT / ABSENT / STALE,
+     * with `advice` naming the fetch that repairs it. Previously this built
+     * the path by hand and then asked yame_store_state() about the whole
+     * DIRECTORY, which warned when any file in it was stale even if the one
+     * being opened was current; this classifies the file actually resolved.
+     *
+     * The spec is the STORE PATH, deliberately. yame_store_resolve() checks
+     * for an existing path first, so a bare filename would let a file in the
+     * working directory shadow the store copy -- the reverse of the order
+     * sesame documents (explicit flag -> <store>/<platform>/ -> ./). Naming
+     * the store path keeps our order; the ./ fallback below stays ours. */
+    snprintf(spec, sizeof spec, "%s/%s", platform, file);
+    st = yame_store_resolve(sesame__fetch_cfg(), spec, NULL, out, n,
+                            &rec, advice, sizeof advice);
+    if (st == YAME_STORE_CURRENT || st == YAME_STORE_STALE) {
+        if (st == YAME_STORE_STALE && advice[0])
+            fprintf(stderr, "sesame: %s\n", advice);
+        if (is_file(out)) return 0;
+    }
 
     snprintf(out, n, "./%s", file);   /* cwd convenience */
     if (is_file(out)) return 0;

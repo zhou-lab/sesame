@@ -41,6 +41,13 @@ YAME it was built against, and the store path in use.
 `-y` is not optional off a terminal: without it yame prints the plan and
 refuses ("Refusing to fetch N files ... Re-run with -y").
 
+A directory name is THAT DIRECTORY'S OWN FILES, not a subtree: `yame fetch -y
+hg38` is the genome annotation, and `hg38/KYCG` or `hg38/models` are addressed
+separately. `-R` takes the subtree (`yame fetch -y -R hg38` is 5.2 GB, mostly
+methscope models sesame never reads); `-n -R <dir>` plans it without
+downloading. Addresses compose, so `yame fetch -y EPICv2 EPICv2/KYCG` is the
+other way to say it.
+
 Store root: `$YAME_DATA_HOME`, else `${XDG_DATA_HOME:-$HOME/.local/share}/yame`
 — one variable for the whole suite (yame, kycg, sesame share the store).
 An asset flag (`--mask`, `--coords`, `--snp`, `--normals`, `--index`) is a
