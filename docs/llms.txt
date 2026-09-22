@@ -56,7 +56,8 @@ land at `<store>/<build>/`. From yame v1.50 the fetch address IS the store
 path, and a directory address is that directory's own files: `yame fetch -y
 hg38` is the genome directory, which also carries the suite's ~30 MB
 coordinate stream (`cpg_nocontig.cr`) that sesame never opens. The pre-1.50
-`genomes/hg38` spelling works through v1.51 only.
+`genomes/hg38` spelling resolves through v1.51 and is removed in v1.52, so use
+the store path.
 
 Downloads are digest-verified; `shasum -a 256 -c SHA256SUMS` re-checks by hand.
 

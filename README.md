@@ -1,10 +1,13 @@
 # sesame-cli
 
-![license](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
-![language](https://img.shields.io/badge/C-C11-00599C)
-![arrays](https://img.shields.io/badge/arrays-EPIC%20%7C%20EPICv2%20%7C%20HM450%20%7C%20MSA-brightgreen)
-![vs R](https://img.shields.io/badge/betas%20vs%20R-bit--identical-success)
+[![build](https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml/badge.svg)](https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml)
+[![conda](https://img.shields.io/conda/vn/zhou-lab/sesame?label=conda)](https://anaconda.org/zhou-lab/sesame)
+[![license](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 [![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fzwdzwd.github.io%2Fsesame-cli%2Fcoverage.json)](scripts/coverage.sh)
+[![docs](https://img.shields.io/badge/docs-online-blueviolet)](https://zwdzwd.github.io/sesame-cli/)
+[![language](https://img.shields.io/badge/C-C11-00599C)](include/sesame.h)
+[![arrays](https://img.shields.io/badge/arrays-EPIC%20%7C%20EPICv2%20%7C%20HM450%20%7C%20MSA-brightgreen)](README.md#data-files-and-the-store)
+[![vs R](https://img.shields.io/badge/betas%20vs%20R-bit--identical-success)](NUMERICS.md)
 
 Infinium DNA-methylation analysis as a single C binary — **IDAT → betas → QC,
 differential methylation, and copy number** — with no R and no Bioconductor. A
@@ -205,8 +208,11 @@ It uses the **raw** signal (channel inference would erase the Type-I channel-swi
 genotype). `--snp` is the platform's `<platform>.<genome>.snp.tsv.gz` (or the store
 default). `--variants` keeps only the informative probes — rs and channel-switching
 — dropping the non-switching Infinium-I bulk (~99% of rows) that almost never call
-a variant. Genotype calls and variant fractions are **exact** vs R's `formatVCF`
-(the quality score differs on ~0.01% of probes in the deep tail; see `NUMERICS.md`).
+a variant. Genotype calls and variant fractions are **exact** vs R's `formatVCF` on every
+probe whose colour channel the store's ordering and `sesameData`'s manifest
+agree on — 127,550 of 127,572 on EPICv2. The other 22 are an annotation
+disagreement rather than a divergence, and the quality score differs on ~0.01%
+of probes in the deep tail; both are quantified in `NUMERICS.md`.
 
 ## Utilities
 

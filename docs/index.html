@@ -488,6 +488,28 @@ cinderplot 'out/bins.tsv
   </section>
 
   <section class="card">
+    <h2>Where we differ from R <span class="m">— DIVERGENCES.md</span></h2>
+    <p>R is the oracle, and nearly everything matches it to the ULP. The
+      exceptions are listed — not rounded away — in
+      <a href="https://github.com/zwdzwd/sesame-cli/blob/main/DIVERGENCES.md">DIVERGENCES.md</a>,
+      each with what differs, why, and the measurement that settled it.</p>
+    <p>Most of them are not arithmetic at all: the two programs read
+      <b>different annotation</b>. sesame reads the store
+      (InfiniumAnnotation v8.1); R reads the copy inside
+      <code class="inl">sesameData</code>. Where those disagree — 22 EPICv2 SNP
+      probes whose colour channel differs, 635 EPIC control probes named
+      <code class="inl">ctl_10609447_NEGATIVE</code> here and
+      <code class="inl">ctl_10609447</code> there — the newer annotation is the
+      one this build is correct against.</p>
+    <pre><code><span class="cm"># the tests grade against frozen values, not a live R</span>
+tests/truth/vcf.EPICv2.tsv.gz   <span class="cm"># 127,572 rows, 22 C-sourced</span>
+tests/truth/PROVENANCE.tsv      <span class="cm"># R, sesame, sesameData, store</span>
+
+<span class="cm"># regenerating refuses to freeze an unexplained value</span>
+make truth RSCRIPT=Rscript-4.6.0</code></pre>
+  </section>
+
+  <section class="card">
     <h2>Speed <span class="m">— vs the R package</span></h2>
     <p>One EPICv2 sample, IDAT → betas, median of 3. R is timed twice: the
       <code class="inl">openSesame()</code> call alone, and the whole invocation —
@@ -644,8 +666,10 @@ yame index -s names.txt MyArray.mask.cm  <span class="cm"># name it</span></code
 </section>
 
 <footer>
-  Betas are bit-identical to R where it counts; every intentional divergence is quantified in
-  <a href="https://github.com/zwdzwd/sesame-cli/blob/main/NUMERICS.md">NUMERICS.md</a>.
+  Betas are bit-identical to R where it counts. Every step's tolerance is in
+  <a href="https://github.com/zwdzwd/sesame-cli/blob/main/NUMERICS.md">NUMERICS.md</a>;
+  every place the two programs give <i>different answers</i> — and why — is in
+  <a href="https://github.com/zwdzwd/sesame-cli/blob/main/DIVERGENCES.md">DIVERGENCES.md</a>.
   AGPL-3.0-or-later. · <a href="https://github.com/zwdzwd/sesame-cli">github.com/zwdzwd/sesame-cli</a>
 </footer>
 

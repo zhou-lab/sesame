@@ -67,6 +67,19 @@ a <- commandArgs(TRUE); sp<-a[1]; tp<-a[2]
 sv <- read.table(a[3], colClasses=c("character","numeric"))
 rl <- mLiftOver(setNames(sv$V2, sv$V1), tp, sp)
 cc <- read.table(a[4], colClasses=c("character","numeric")); cL<-setNames(cc$V2,cc$V1)
+
+## Control probes are named differently by the two orderings, and only by
+## name: the store's EPIC ordering calls them ctl_<address>_<TYPE>
+## (ctl_10609447_NEGATIVE), sesameData's EPIC.address$ordering calls them
+## ctl_<address>. Measured 2026-09-20: 635 such probes on EPIC, and with the
+## type suffix stripped the two sets are IDENTICAL -- same addresses, none of
+## them a real probe. Comparing the raw strings reported 1270 set differences
+## for a difference in spelling, so normalise before comparing. A real probe
+## missing from either side still fails, which is what this gate is for.
+ctl_norm <- function(v) sub("^(ctl_[0-9]+)_.*$", "\\1", v)
+names(rl) <- ctl_norm(names(rl)); names(cL) <- ctl_norm(names(cL))
+rl <- rl[!duplicated(names(rl))]; cL <- cL[!duplicated(names(cL))]
+
 ro <- length(setdiff(names(rl),names(cL))); co <- length(setdiff(names(cL),names(rl)))
 ids <- intersect(names(rl), names(cL))
 namis <- sum(xor(is.na(rl[ids]), is.na(cL[ids])))

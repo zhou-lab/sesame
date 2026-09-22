@@ -18,10 +18,17 @@ v <- formatVCF(sdf, anno)                                  # data.frame, INFO co
 
 info <- as.character(v$INFO)
 pull <- function(tag) sub(paste0(".*", tag, "=([^;]*).*"), "\\1", info)
+## The SigDF's colour channel comes from sesameData's manifest; the C side
+## reads the store's ordering. Where the two disagree, the out-of-band
+## allele fraction of a Type-I probe is computed from the OTHER channel and
+## comes out as the exact complement -- an annotation difference, not a
+## divergence in the port. Emit it so the comparison can separate the two.
+cols <- as.data.frame(sdf)[, c("Probe_ID", "col")]
 df <- data.frame(Probe_ID = pull("Probe_ID"),
                  GT = pull("GT"),
                  GS = as.integer(v$QUAL),
                  PVF = as.numeric(pull("PVF")),
                  stringsAsFactors = FALSE)
+df$Rcol <- as.character(cols$col[match(df$Probe_ID, cols$Probe_ID)])
 write.table(df, outfile, sep = "\t", quote = FALSE, row.names = FALSE)
 cat(sprintf("wrote %s: %d genotyped probes\n", outfile, nrow(df)))

@@ -1,0 +1,8 @@
+generated	2026-09-20T12:04:43Z
+store	/mnt/isilon/zhou_lab/projects/20191221_references/YAME
+R	R version 4.6.0 (2026-04-24)
+sesame	1.29.5
+sesameData	1.29.10
+BiocVersion	3.23.1
+sesame-cli	0.5
+yame	v1.51

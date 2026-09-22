@@ -55,33 +55,68 @@ for l in sys.stdin:
 # R oracle
 "$RSCRIPT" "$here/compare_vcf.R" "$pfx" $plat "$snp" "$work/r.tsv" >/dev/null 2>&1
 
-python3 - "$work/c.tsv" "$work/r.tsv" <<'PY'
+python3 - "$work/c.tsv" "$work/r.tsv" "$ord" <<'PY'
 import sys
+import gzip
 def load(fn):
     d={}
     for l in open(fn):
         p=l.rstrip('\n').split('\t')
         if p[0]=='Probe_ID': continue
-        d[p[0]]=(p[1],p[2],p[3])
+        d[p[0]]=p[1:]                       # GT, GS, PVF [, Rcol]
     return d
 C=load(sys.argv[1]); R=load(sys.argv[2])
 common=set(C)&set(R)
 if not common: print("FAIL: no shared probes"); sys.exit(1)
-gt_mis=pvf_max=0.0; gt_mis=0; gs_off=0
-for k in common:
-    cg,cs,cp=C[k]; rg,rs,rp=R[k]
+
+## The two sides read DIFFERENT manifests: C the store's ordering, R the one
+## inside sesameData. Where they disagree about a Type-I probe's colour
+## channel, getAFTypeIbySumAlleles is computed from the other channel and the
+## fraction comes out as the exact complement -- an annotation-version
+## difference, not a divergence in the port (the formula is identical; see
+## NUMERICS.md). Exclude those probes from the gate, but only on the evidence
+## of the two manifests, never on whether the answer matched, and report how
+## many so drift shows up as a CHANGED count rather than a wider blind spot.
+##
+## WHICH MANIFEST IS RIGHT IS DELIBERATELY NOT DECIDED HERE. This test asks
+## one question -- does the C port reproduce formatVCF -- and answering it does
+## not require knowing whose channel assignment is correct. Adjudicating would
+## bind the test to re-adjudicate on every annotation release, and would put a
+## claim about Illumina's manifest inside a fidelity gate, which is the wrong
+## place for it. The excluded probes are listed by the harness; anyone who
+## wants the answer can take it up with the manifests themselves.
+ocol={}
+with gzip.open(sys.argv[3],'rt') as f:
+    next(f)
+    for l in f:
+        p=l.rstrip('\n').split('\t'); ocol[p[0]]=p[3]
+excl={k for k in common
+      if len(R[k])>3 and R[k][3] and R[k][3]!='NA' and ocol.get(k) and R[k][3]!=ocol[k]}
+EXPECTED_EXCL=22          # EPICv2 v8.1 ordering vs sesameData 1.29.10, 2026-09-20
+graded=common-excl
+
+gt_mis=0; pvf_max=0.0; gs_off=0
+for k in graded:
+    cg,cs,cp=C[k][0],C[k][1],C[k][2]; rg,rs,rp=R[k][0],R[k][1],R[k][2]
     if cg!=rg: gt_mis+=1
     try:
         if abs(int(cs)-int(rs))>1: gs_off+=1
     except ValueError: pass
     try: pvf_max=max(pvf_max, abs(float(cp)-float(rp)))
     except ValueError: pass
-n=len(common)
-print(f"vcf vs R formatVCF: n={n} GT-mismatch={gt_mis} PVF-maxdiff={pvf_max:.1e} GS-off(>1)={gs_off}")
+n=len(graded)
+print(f"vcf vs R formatVCF: n={n} GT-mismatch={gt_mis} PVF-maxdiff={pvf_max:.1e} "
+      f"GS-off(>1)={gs_off}  [excluded {len(excl)} channel-disagreeing probes]")
 ok = (gt_mis==0 and pvf_max < 1e-6 and gs_off <= n*0.001)
 if not ok:
     print(f"FAIL: GT={gt_mis} PVF={pvf_max:.1e} GS-off={gs_off} (>{int(n*0.001)})"); sys.exit(1)
-print(f"ok   vcf: {n} probes, GT + PVF exact vs R, GS off on {gs_off} (deep-tail dbinom)")
+if len(excl)!=EXPECTED_EXCL:
+    print(f"FAIL: {len(excl)} probes have a channel disagreement between the store "
+          f"ordering and sesameData, expected {EXPECTED_EXCL}. The manifests moved; "
+          f"re-check which is right and update EXPECTED_EXCL with a note in NUMERICS.md.")
+    sys.exit(1)
+print(f"ok   vcf: {n} probes, GT + PVF exact vs R, GS off on {gs_off} (deep-tail dbinom); "
+      f"{len(excl)} excluded on a manifest channel disagreement")
 PY
 rc=$?
 

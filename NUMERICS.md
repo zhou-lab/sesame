@@ -1,5 +1,34 @@
 # NUMERICS.md — divergence register
 
+## What these numbers were measured against
+
+Every claim below is a measurement, and a measurement without its oracle is an
+assertion. As of **2026-09-20** the numbers here come from:
+
+| | |
+|---|---|
+| R | 4.6.0 (2026-04-24), `Rscript-4.6.0` from the lab's shared_Renv shims |
+| sesame | 1.29.5, re-measured identically under 1.31.4 |
+| sesameData | 1.29.10 |
+| Bioconductor | 3.23.1 |
+| annotation | the store at InfiniumAnnotation v8.1 |
+| sesame-cli | 0.5, YAME v1.51 |
+
+This block was missing until 2026-09-20, and its absence cost real time: when
+`test-vcf` began failing, nothing in this file said which sesame the "exact"
+claim had been measured against, so whether 22 disagreeing probes were new or
+long-standing had to be re-derived from scratch rather than read off. The same
+four versions are captured per run in `tests/truth/PROVENANCE.tsv`, and the
+release SOP requires them in the log entry.
+
+The oracle was upgraded to sesame **1.31.4** on 2026-09-22 and every number
+above was re-measured: **all identical**, including the 22 excluded vcf probes
+and the liftover set-difference. That is the expected result and a useful
+control — the divergences live in `sesameData`, which is unchanged at 1.29.10,
+not in sesame's code. They will only move when `sesameData` does, and 1.29.x
+is the devel series for Bioc 3.23, so that is a next-cycle event.
+
+
 sesame is an independent implementation of sesame's basic preprocessing. It is
 **not** bit-exact with the R package by mandate: where the R code has a defect or
 a numerically fragile construction, sesame fixes it and records the difference
@@ -291,9 +320,28 @@ allele fraction (`getAFTypeIbySumAlleles`) for `REF_InfI`, else `beta` — then 
 3-genotype binomial model (background 0.1, 40 beads) picks 0/0, 0/1, or 1/1 and a
 phred-like score `GS = floor(-log10(1 - GL_max/ΣGL)·10)`.
 
-Validated against R on all **127,572** EPICv2 SNP probes (GM12878, raw;
-`tests/run_vcf.sh`): the **genotype call (GT) and variant fraction (PVF) are
-exact** — 0 GT mismatches, PVF max diff 0. The binomial coefficient cancels in the
+Validated against R on **127,550** of the 127,572 EPICv2 SNP probes (GM12878,
+raw; `tests/run_vcf.sh`): the **genotype call (GT) and variant fraction (PVF)
+are exact** — 0 GT mismatches, PVF max diff 0.
+
+**The 22 excluded probes are a manifest disagreement, not a divergence**
+(measured 2026-09-20). The two sides read different manifests: the C side the
+store's `EPICv2.ordering.tsv.gz` at InfiniumAnnotation v8.1, R the one inside
+`sesameData` (1.29.10 here). On 22 Type-I probes the two disagree about the
+probe's **colour channel** — `G` in one, `R` in the other, all 22. The
+out-of-band allele fraction is then computed from the opposite channel, so
+`getAFTypeIbySumAlleles` returns the exact complement: C and R PVF sum to
+1.0000 on every one of the 22, and 11 of them cross a genotype boundary. The
+formula is identical on both sides (`R/sesame.R:242` vs `src/vcf.c:54`,
+`pmax(other,1)/pmax(total,2)`); only the partition into `InfIG`/`InfIR`
+differs. `tests/run_vcf.sh` therefore grades only probes where the two
+manifests agree on the channel, decides that from the manifests alone (never
+from whether the answer matched), and **fails if the excluded count moves off
+22** — so annotation drift surfaces as a changed number rather than a widening
+blind spot. Which manifest is right is **deliberately not decided**: this gate asks whether
+the C port reproduces `formatVCF`, and that question does not need an answer to
+whose channel assignment is correct. Deciding it would bind the test to
+re-decide on every annotation release. The binomial coefficient cancels in the
 posterior `GL_max/ΣGL`, so the ratio is computed in log space without it. `GS`
 matches on all but **11 probes** (≤10 apart), all at extreme scores (> ~80, beyond
 the nominal 7–85 range) where `1 - GL_max/ΣGL` is ~1e-40: there R's `dbinom`
