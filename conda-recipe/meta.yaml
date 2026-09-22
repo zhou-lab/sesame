@@ -45,8 +45,9 @@ requirements:
     # tags compiled into src/registry.h. From v1.50 the fetch address is the
     # store path (`yame fetch -y EPICv2`), which is what our error messages
     # print; the older `InfiniumAnnotation/EPICv2` spelling stops resolving in
-    # v1.52, so the floor is not cosmetic.
-    - yame >=1.51
+    # v1.52, so the floor is not cosmetic. v1.53 is the release this build is
+    # pinned to and whose catalog src/registry.h projects.
+    - yame >=1.53
 
 test:
   commands:
@@ -58,8 +59,8 @@ test:
 
 about:
   home: https://github.com/zwdzwd/sesame-cli
-  license: AGPL-3.0-or-later
-  license_family: AGPL
+  license: LicenseRef-CHOP-Academic-BSD-2-Clause
+  license_family: OTHER
   license_file: LICENSE
   summary: Standalone C reimplementation of sesame's Infinium methylation preprocessing (IDAT -> betas), with QC, DML, and CNV.
   description: |

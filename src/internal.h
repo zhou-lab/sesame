@@ -1,7 +1,7 @@
 /* internal.h -- shared across libsesame TUs. Not installed, not public.
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * Copyright (C) 2026-present Wanding Zhou
+ * Copyright (C) 2026-present The Children's Hospital of Philadelphia
  * Part of sesame-cli, licensed under AGPL-3.0-or-later; see LICENSE.
  */
 #ifndef SESAME_INTERNAL_H

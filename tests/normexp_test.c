@@ -6,7 +6,7 @@
  *   normexp_test huber      < one value per line (a vector) -> "mu<TAB>s<TAB>mad0"
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
- * Copyright (C) 2026-present Wanding Zhou
+ * Copyright (C) 2026-present The Children's Hospital of Philadelphia
  */
 #include "internal.h"
 #include <stdio.h>

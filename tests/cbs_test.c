@@ -4,7 +4,7 @@
  * sesame__cbs against DNAcopy::segment on identical input.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
- * Copyright (C) 2026-present Wanding Zhou
+ * Copyright (C) 2026-present The Children's Hospital of Philadelphia
  */
 #include "sesame.h"
 #include "internal.h"

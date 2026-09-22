@@ -2,7 +2,7 @@
 
 [![build](https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml/badge.svg)](https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml)
 [![conda](https://img.shields.io/conda/vn/zhou-lab/sesame?label=conda)](https://anaconda.org/zhou-lab/sesame)
-[![license](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
+[![license](https://img.shields.io/badge/license-BSD--2--Clause%20(academic)%20%2F%20commercial-blue.svg)](LICENSE)
 [![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fzwdzwd.github.io%2Fsesame-cli%2Fcoverage.json)](scripts/coverage.sh)
 [![docs](https://img.shields.io/badge/docs-online-blueviolet)](https://zwdzwd.github.io/sesame-cli/)
 [![language](https://img.shields.io/badge/C-C11-00599C)](include/sesame.h)
@@ -554,9 +554,12 @@ and is required reading before changing a prep step.
 
 ## License
 
-**AGPL-3.0-or-later** — see `LICENSE`. This matches the wider Zhou Lab toolchain
-(YAME is also AGPL-3.0), which is what lets sesame-cli link it directly to read
-`.cm` masks in-process. The R package `sesame` is MIT and a *separate program*;
-invoking either way is unaffected. The dye-bias quantile normalization is a
-clean-room reimplementation rather than `preprocessCore` (`LGPL`); it agrees to
-~2 ULP (see `NUMERICS.md`, D8).
+**2-Clause BSD for academic and non-profit research use**; for commercial use
+or transfer, inquire with Dr. Wanding Zhou at zhouw3@chop.edu. © 2026-present
+The Children's Hospital of Philadelphia — see `LICENSE`. The bundled
+[YAME](https://github.com/zhou-lab/YAME) carries the same terms, which is what
+lets sesame-cli link it directly to read `.cm` masks in-process. The R package
+`sesame` is a *separate program* distributed through Bioconductor under
+AGPL-3; invoking either way is unaffected. The dye-bias quantile normalization
+is a clean-room reimplementation rather than `preprocessCore` (`LGPL`); it
+agrees to ~2 ULP (see `NUMERICS.md`, D8).
