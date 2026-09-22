@@ -96,6 +96,12 @@ const char *sesame_store_dir(char *out, size_t n);
 /* Finds a per-platform asset at <store>/<platform>/<file>,
  * then ./<file>. 0 and fills out on success, -1 if absent. Never downloads,
  * never prompts. */
+/* Warn on stderr when a store directory holds files from an EARLIER
+ * annotation release than this build pins. The check and the wording are
+ * yame's (yame_store_state); sesame only supplies the compiled file list.
+ * Called automatically when an asset resolves out of the store. */
+void sesame_warn_if_stale(const char *store_subdir);
+
 int sesame_asset_locate(const char *platform, const char *file,
                         char *out, size_t n);
 

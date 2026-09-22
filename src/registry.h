@@ -7,6 +7,8 @@
 #ifndef SESAME_REGISTRY_H
 #define SESAME_REGISTRY_H
 
+#include "assets.h"   /* yame_asset_file_t, for SESAME_FILES */
+
 typedef struct {
     const char *platform;
     int32_t     beads;      /* IDAT nSNPsRead; 0 = no auto-detect */
@@ -34,47 +36,50 @@ static const sesame_genome_reg_t SESAME_GENOMES[] = {
     { NULL, NULL }
 };
 
-/* The files this build reads, for the record. A directory glob is that
- * directory's own files (YAME c8bc8e4 onward); cpg_nocontig.cr is the
- * suite's row space, which sesame does not open. */
-/*   EPIC/EPIC.ordering.tsv.gz            a55f9587ec02 */
-/*   EPIC/EPIC.hg38.coord.tsv.gz          08904e7dd06f */
-/*   EPIC/EPIC.hg38.snp.tsv.gz            f4310e531401 */
-/*   EPIC/EPIC.typeI_ext.tsv.gz           e2ecbe9c7bc7 */
-/*   EPIC/EPIC.hg38.mask.cm               28a4d03b714f */
-/*   EPIC/EPIC.hg38.mask.cm.idx           bf0ba8148596 */
-/*   EPICv2/EPICv2.ordering.tsv.gz        52f8c45dc9d9 */
-/*   EPICv2/EPICv2.hg38.coord.tsv.gz      6c2213eff46a */
-/*   EPICv2/EPICv2.hg38.snp.tsv.gz        e4cef2b827ab */
-/*   EPICv2/EPICv2.typeI_ext.tsv.gz       4872dab7ec1e */
-/*   EPICv2/EPICv2.hg38.mask.cm           7463ce67bb26 */
-/*   EPICv2/EPICv2.hg38.mask.cm.idx       00b94541b3c8 */
-/*   HM450/HM450.ordering.tsv.gz          e5106a34e970 */
-/*   HM450/HM450.hg38.coord.tsv.gz        bedd968a41a2 */
-/*   HM450/HM450.hg38.snp.tsv.gz          3ad6d0226b9d */
-/*   HM450/HM450.typeI_ext.tsv.gz         dd223d6672d5 */
-/*   HM450/HM450.hg38.mask.cm             adebc62a6e6c */
-/*   HM450/HM450.hg38.mask.cm.idx         27dff6eb3032 */
-/*   MSA/MSA.ordering.tsv.gz              f89fa5ff525b */
-/*   MSA/MSA.hg38.coord.tsv.gz            08f4c9a307cb */
-/*   MSA/MSA.hg38.snp.tsv.gz              e0521bdf0598 */
-/*   MSA/MSA.typeI_ext.tsv.gz             b261dd9f9569 */
-/*   MSA/MSA.hg38.mask.cm                 928e9f782e7d */
-/*   MSA/MSA.hg38.mask.cm.idx             b6c0d7a80c3e */
-/*   hg38/seqinfo.tsv.gz                  fb0451cc3a14 */
-/*   hg38/gaps.tsv.gz                     0585abdbf802 */
-/*   hg38/cytoband.tsv.gz                 a49a0cf26294 */
-/*   hg38/genes.bed.gz                    0ec51c895e05 */
-/*   hg38/genes.bed.gz.tbi                fa4064aed5e8 */
-/*   mm10/seqinfo.tsv.gz                  ed48effa987d */
-/*   mm10/gaps.tsv.gz                     91f3ec9b0856 */
-/*   mm10/cytoband.tsv.gz                 a7bb429fb76b */
-/*   mm10/genes.bed.gz                    0e4497a94a88 */
-/*   mm10/genes.bed.gz.tbi                5f6b4acadd9e */
-/*   mm39/seqinfo.tsv.gz                  bdcee6698a3d */
-/*   mm39/gaps.tsv.gz                     002c5aa5e3ef */
-/*   mm39/cytoband.tsv.gz                 20f66bce778c */
-/*   mm39/genes.bed.gz                    ce6c63a5ab35 */
-/*   mm39/genes.bed.gz.tbi                6002f81994af */
+/* Every file this build reads, for yame_store_state(). Digests are
+ * compared against each store directory's SHA256SUMS -- a string
+ * compare, no hashing, so this is cheap enough to run per lookup. */
+static const yame_asset_file_t SESAME_FILES[] = {
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPIC/EPIC.ordering.tsv.gz", "EPIC/EPIC.ordering.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPIC/EPIC.ordering.tsv.gz", "a55f9587ec0228406bb731a56bebb54bbde7f898d53c2afcfdd50b1b3e950d01", 7756709, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPIC/EPIC.hg38.coord.tsv.gz", "EPIC/EPIC.hg38.coord.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPIC/EPIC.hg38.coord.tsv.gz", "08904e7dd06f0df739951eec6b672723021f2a25d704ead436145eff650703e7", 5505138, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPIC/EPIC.hg38.snp.tsv.gz", "EPIC/EPIC.hg38.snp.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPIC/EPIC.hg38.snp.tsv.gz", "f4310e5314013dc83328600a9bcb0b1e0a544dc6e7d8bd0603a8a5a941885b4d", 1776995, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPIC/EPIC.typeI_ext.tsv.gz", "EPIC/EPIC.typeI_ext.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPIC/EPIC.typeI_ext.tsv.gz", "e2ecbe9c7bc7610a298427bf623b9c5f881ab40aa7d47e89bf103d8d1222a4db", 91446, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPIC/EPIC.hg38.mask.cm", "EPIC/EPIC.hg38.mask.cm", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPIC/EPIC.hg38.mask.cm", "28a4d03b714fe84fb64985fd9ed4826c51f7d619e9361d249bbce80e3f0d447e", 365760, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPIC/EPIC.hg38.mask.cm.idx", "EPIC/EPIC.hg38.mask.cm.idx", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPIC/EPIC.hg38.mask.cm.idx", "bf0ba81485964e805f2c6652e5e1d336c895185c4391f500f23deba7eaa8e593", 733, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPICv2/EPICv2.ordering.tsv.gz", "EPICv2/EPICv2.ordering.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPICv2/EPICv2.ordering.tsv.gz", "52f8c45dc9d90c59367e020489a295b4b0c4f434e20930c44fe6cc079ba2de7d", 8546436, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPICv2/EPICv2.hg38.coord.tsv.gz", "EPICv2/EPICv2.hg38.coord.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPICv2/EPICv2.hg38.coord.tsv.gz", "6c2213eff46a14a1cb414f60b2f12ec25bfce949c2419498a919c316aa9be12e", 5728827, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPICv2/EPICv2.hg38.snp.tsv.gz", "EPICv2/EPICv2.hg38.snp.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPICv2/EPICv2.hg38.snp.tsv.gz", "e4cef2b827abd0a6173c22715f56451f0e01722a5c32f2c8fe7077381220ee17", 1631893, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPICv2/EPICv2.typeI_ext.tsv.gz", "EPICv2/EPICv2.typeI_ext.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPICv2/EPICv2.typeI_ext.tsv.gz", "4872dab7ec1e8db7ed99c24a3990137478bdd8b659ea60f821230eb352692938", 89958, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPICv2/EPICv2.hg38.mask.cm", "EPICv2/EPICv2.hg38.mask.cm", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPICv2/EPICv2.hg38.mask.cm", "7463ce67bb26904e8ef236f1befffbac8db1c2e4ac07fc3d6d7eb2b8072782d0", 301037, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:EPICv2/EPICv2.hg38.mask.cm.idx", "EPICv2/EPICv2.hg38.mask.cm.idx", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/EPICv2/EPICv2.hg38.mask.cm.idx", "00b94541b3c8083d65e861ca1ccae1dc9a1093172591ea9c4dc539f3eadd290e", 760, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:HM450/HM450.ordering.tsv.gz", "HM450/HM450.ordering.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/HM450/HM450.ordering.tsv.gz", "e5106a34e970f61b36fc70661239c4a1176c816f13af6a5dde61db9b2af9ae44", 4583238, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:HM450/HM450.hg38.coord.tsv.gz", "HM450/HM450.hg38.coord.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/HM450/HM450.hg38.coord.tsv.gz", "bedd968a41a2f287e18d94c86f34d46fd640086bd3c43639bd0a878ea64f3a40", 3064215, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:HM450/HM450.hg38.snp.tsv.gz", "HM450/HM450.hg38.snp.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/HM450/HM450.hg38.snp.tsv.gz", "3ad6d0226b9dc928f65ed028a6bca59d91a53a6803e66e4645a8f97cd42f5a7e", 1697522, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:HM450/HM450.typeI_ext.tsv.gz", "HM450/HM450.typeI_ext.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/HM450/HM450.typeI_ext.tsv.gz", "dd223d6672d5fd0388048d9d9862be6947bac3b5e3effb088f16da90582d1c4b", 72943, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:HM450/HM450.hg38.mask.cm", "HM450/HM450.hg38.mask.cm", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/HM450/HM450.hg38.mask.cm", "adebc62a6e6c1a783a5cd00bf61b441ee2b72c017d7be978fbf2ee6334d04360", 213674, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:HM450/HM450.hg38.mask.cm.idx", "HM450/HM450.hg38.mask.cm.idx", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/HM450/HM450.hg38.mask.cm.idx", "27dff6eb30329c3fc974226a8da3e2b8d5d66f4205abde8eebb78fb07e28b959", 727, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:MSA/MSA.ordering.tsv.gz", "MSA/MSA.ordering.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/MSA/MSA.ordering.tsv.gz", "f89fa5ff525b4fd08b9c24303eabf8dc697fadbd4f35a1b606d19e4fb2199b2c", 2920535, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:MSA/MSA.hg38.coord.tsv.gz", "MSA/MSA.hg38.coord.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/MSA/MSA.hg38.coord.tsv.gz", "08f4c9a307cbbc271007c6d1318435df9877d04cd46a3f9a8e2c80d6529227fc", 1617785, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:MSA/MSA.hg38.snp.tsv.gz", "MSA/MSA.hg38.snp.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/MSA/MSA.hg38.snp.tsv.gz", "e0521bdf0598efb9205edee4bdc0ef7ba36ada73870a7eedaebaa3954c9158c2", 1065396, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:MSA/MSA.typeI_ext.tsv.gz", "MSA/MSA.typeI_ext.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/MSA/MSA.typeI_ext.tsv.gz", "b261dd9f956946fa1ea7fc224f18dc3a9c34573f6e9c2853b6202cc0cc679410", 30536, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:MSA/MSA.hg38.mask.cm", "MSA/MSA.hg38.mask.cm", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/MSA/MSA.hg38.mask.cm", "928e9f782e7d23bd33d81e073f7185d957f3f1b1dad27691dc37f2f0aa1d178e", 156578, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.1:MSA/MSA.hg38.mask.cm.idx", "MSA/MSA.hg38.mask.cm.idx", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.1/MSA/MSA.hg38.mask.cm.idx", "b6c0d7a80c3e5442df60fd6be5d90b84ecc45d55092a71e642769a70ac8dcc90", 774, "", "", "", "" },
+    { "zhou-lab/genomes@v4:hg38/seqinfo.tsv.gz", "hg38/seqinfo.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/hg38/seqinfo.tsv.gz", "fb0451cc3a142233e220154fd7af2961d0ff2e8ba1113ca2b5ff6a948680b9e2", 221, "", "", "", "" },
+    { "zhou-lab/genomes@v4:hg38/gaps.tsv.gz", "hg38/gaps.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/hg38/gaps.tsv.gz", "0585abdbf80263e8779f5cdcc24bcf8ed2f108efb738e8ba44ba9b3ac24d5733", 5185, "", "", "", "" },
+    { "zhou-lab/genomes@v4:hg38/cytoband.tsv.gz", "hg38/cytoband.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/hg38/cytoband.tsv.gz", "a49a0cf26294e04d12cf073edcf2bd512f231c2f30607105c2fc4157b6c149f1", 9645, "", "", "", "" },
+    { "zhou-lab/genomes@v4:hg38/genes.bed.gz", "hg38/genes.bed.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/hg38/genes.bed.gz", "0ec51c895e05475cafdce90e83ef72beae2eee06b3fbe5544821ebd56bb1d423", 10708528, "", "", "", "" },
+    { "zhou-lab/genomes@v4:hg38/genes.bed.gz.tbi", "hg38/genes.bed.gz.tbi", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/hg38/genes.bed.gz.tbi", "fa4064aed5e8f89db296cdcea7f5b131f8c6c53b5e213614b27e386a8f30b8d8", 192014, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm10/seqinfo.tsv.gz", "mm10/seqinfo.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm10/seqinfo.tsv.gz", "ed48effa987d844b514e7bfd237447a949191c149f95aba383604cdc463f2a9f", 203, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm10/gaps.tsv.gz", "mm10/gaps.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm10/gaps.tsv.gz", "91f3ec9b0856505819e357b0644be35840b37dc26b42afced0c80e3ceedf59fe", 4758, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm10/cytoband.tsv.gz", "mm10/cytoband.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm10/cytoband.tsv.gz", "a7bb429fb76b97a37654fde43ced186d6bff49f4564faef1650b4e12af12566a", 4129, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm10/genes.bed.gz", "mm10/genes.bed.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm10/genes.bed.gz", "0e4497a94a8830a2d386f66836f6fec7d0669fdf3ee8ec62f06196117d23e14e", 6823722, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm10/genes.bed.gz.tbi", "mm10/genes.bed.gz.tbi", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm10/genes.bed.gz.tbi", "5f6b4acadd9e2badf5b6b91bf9f5cb8ce864553362d34044188e1a2ecd923ff6", 202003, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm39/seqinfo.tsv.gz", "mm39/seqinfo.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm39/seqinfo.tsv.gz", "bdcee6698a3dd045e91b07a7be6ad36b0c5b372707a17fb33051c6a7a251027b", 203, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm39/gaps.tsv.gz", "mm39/gaps.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm39/gaps.tsv.gz", "002c5aa5e3efab25947e93847e397c4629057640bc635b512d07f26029dc2337", 2038, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm39/cytoband.tsv.gz", "mm39/cytoband.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm39/cytoband.tsv.gz", "20f66bce778c2d07c08362673f1c75dadf6290925182dbb099d693a8bc183634", 757, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm39/genes.bed.gz", "mm39/genes.bed.gz", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm39/genes.bed.gz", "ce6c63a5ab350fd40e4b75ea1b5295745f70114cb19d5717e938a39f02b96ca2", 7047902, "", "", "", "" },
+    { "zhou-lab/genomes@v4:mm39/genes.bed.gz.tbi", "mm39/genes.bed.gz.tbi", "https://raw.githubusercontent.com/zhou-lab/genomes/v4/mm39/genes.bed.gz.tbi", "6002f81994af23a84d6df8c8aba152bb507ed88b0a66532a3d1ebee1f9192f10", 203709, "", "", "", "" },
+};
+#define SESAME_N_FILES (sizeof(SESAME_FILES)/sizeof(SESAME_FILES[0]))
 
 #endif

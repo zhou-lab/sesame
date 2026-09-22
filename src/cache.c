@@ -101,6 +101,44 @@ static const char *sesame__genome_tag(const char *genome)
     return "the pinned tag";
 }
 
+/* Is the store holding an EARLIER annotation release than this build pins?
+ *
+ * sesame does no verification of its own: yame_store_state() compares each
+ * compiled digest against the store directory's own SHA256SUMS line and
+ * composes the advice, so the sentence a sesame user reads is the one a yame
+ * user reads, and it changes when yame changes it. The comparison is a string
+ * compare over one small text file -- no hashing -- so this is cheap enough to
+ * run on every lookup.
+ *
+ * Why it matters here: our only lineage guard is a row-count check, so an
+ * ordering re-released with the SAME probe count and a different order passes
+ * it and then mislabels every probe, silently. That is the failure this
+ * catches.
+ */
+static const yame_fetch_cfg_t *sesame__fetch_cfg(void)
+{
+    static const yame_fetch_cfg_t cfg = {
+        .files = SESAME_FILES, .n_files = SESAME_N_FILES,
+        .tool = "yame",          /* the command that fixes it is yame's */
+        .tool_env = NULL,        /* sesame reads $YAME_DATA_HOME, the shared one */
+        /* sesame documents that it NEVER prompts -- a prompt hangs a Nextflow
+         * job or a Docker build with no indication why. From YAME v1.52 the
+         * resolver will ask on a terminal unless this is set, and a
+         * designated initializer zero-fills it, i.e. defaults to prompting. */
+        .no_prompt = 1,
+    };
+    return &cfg;
+}
+
+void sesame_warn_if_stale(const char *store_subdir)
+{
+    char advice[1024];
+    if (!store_subdir) return;
+    if (yame_store_state(sesame__fetch_cfg(), store_subdir, advice, sizeof advice)
+            == YAME_STORE_STALE && advice[0])
+        fprintf(stderr, "sesame: %s\n", advice);
+}
+
 const char *sesame_platform_from_beads(int32_t beads)
 {
     for (const sesame_reg_t *r = SESAME_REGISTRY; r->platform; r++)
@@ -143,7 +181,7 @@ int sesame_asset_locate(const char *platform, const char *file,
     if (!platform || !file) return -1;
     sesame_store_dir(dir, sizeof dir);
     snprintf(out, n, "%s/%s/%s", dir, platform, file);
-    if (is_file(out)) return 0;
+    if (is_file(out)) { sesame_warn_if_stale(platform); return 0; }
 
     snprintf(out, n, "./%s", file);   /* cwd convenience */
     if (is_file(out)) return 0;

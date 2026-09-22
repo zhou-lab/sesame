@@ -62,6 +62,8 @@ tag_of_dir() {   ## the source@tag of a directory, one per directory by catalog 
   echo "#ifndef SESAME_REGISTRY_H"
   echo "#define SESAME_REGISTRY_H"
   echo
+  echo "#include \"assets.h\"   /* yame_asset_file_t, for SESAME_FILES */"
+  echo
   echo "typedef struct {"
   echo "    const char *platform;"
   echo "    int32_t     beads;      /* IDAT nSNPsRead; 0 = no auto-detect */"
@@ -91,19 +93,33 @@ tag_of_dir() {   ## the source@tag of a directory, one per directory by catalog 
   echo "    { NULL, NULL }"
   echo "};"
   echo
-  echo "/* The files this build reads, for the record. A directory glob is that"
-  echo " * directory's own files (YAME c8bc8e4 onward); cpg_nocontig.cr is the"
-  echo " * suite's row space, which sesame does not open. */"
+  ## The per-file list, as YAME's own yame_asset_file_t. We carry it not to
+  ## verify anything ourselves -- yame_file_state() does the comparison, out of
+  ## the library we already link -- but so that yame's verifier can speak for
+  ## us: a store file whose digest differs from what this build pins is an
+  ## earlier annotation release, and without this list sesame cannot see that.
+  ## The four prose fields are what a browser would show; sesame shows none of
+  ## them, so they stay empty rather than bloating the header.
+  echo "/* Every file this build reads, for yame_store_state(). Digests are"
+  echo " * compared against each store directory's SHA256SUMS -- a string"
+  echo " * compare, no hashing, so this is cheap enough to run per lookup. */"
+  echo "static const yame_asset_file_t SESAME_FILES[] = {"
   for p in $PLATFORMS; do
     files_of "$p/*" | while IFS= read -r r; do
-      printf '/*   %-36s %s */\n' "$(field "$r" store_path)" "$(field "$r" sha256 | cut -c1-12)"
+      printf '    { "%s", "%s", "%s", "%s", %s, "", "", "", "" },\n' \
+        "$(field "$r" key)" "$(field "$r" store_path)" "$(url_of "$(field "$r" key)")" \
+        "$(field "$r" sha256)" "$(field "$r" size)"
     done
   done
   for g in $GENOMES; do
     files_of "$g/*" | grep -v 'cpg_nocontig\.cr' | while IFS= read -r r; do
-      printf '/*   %-36s %s */\n' "$(field "$r" store_path)" "$(field "$r" sha256 | cut -c1-12)"
+      printf '    { "%s", "%s", "%s", "%s", %s, "", "", "", "" },\n' \
+        "$(field "$r" key)" "$(field "$r" store_path)" "$(url_of "$(field "$r" key)")" \
+        "$(field "$r" sha256)" "$(field "$r" size)"
     done
   done
+  echo "};"
+  echo "#define SESAME_N_FILES (sizeof(SESAME_FILES)/sizeof(SESAME_FILES[0]))"
   echo
   echo "#endif"
 } > "$out"
