@@ -361,7 +361,7 @@ Each was validated against R with a differential test (`tests/run_*.sh`):
 | feature | interface | R oracle | result |
 |---|---|---|---|
 | `dyeBiasL` | prep code `E` | `dyeBiasL(inferInfiniumIChannel(sdf))` | bit-identical (≤1 ULP), EPICv2+MSA. Only Inf-II betas move (per-channel scaling leaves Inf-I `M/(M+U)` invariant). |
-| `detectionPnegEcdf` | `preprocess --detection pneg` | `detectionPnegEcdf(sdf, return.pval=TRUE)` | ≤1 ULP on every real probe. C additionally emits `p=1` for all-NA control probes R's SigDF omits. |
+| `detectionPnegEcdf` | `preprocess --detection pneg` | `detectionPnegEcdf(sdf, return.pval=TRUE)` | ≤1 ULP on every real probe outside two manifest-lineage differences written up in `DIVERGENCES.md` (`C:pneg-design-type`, 2 probes on EPIC and HM450; `C:pneg-negctl-type`, HM450's relabelled RESTORATION control). C additionally emits `p=1` for all-NA control probes R's SigDF omits. |
 | `betasCollapseToPfx` | `preprocess --collapse` | `betasCollapseToPfx(betas)` | exact (prefix set, NA pattern, values) — validated on C's own betas so the `.cg` float32 rounding is the only residual. |
 | `mLiftOver` | `sesame mliftover` | `mLiftOver(betas, target, source)` | exact both directions (EPICv2↔EPIC): identical target set, order, NA pattern, and first-match choice. |
 | `imputeBetasMatrixByMean` | `impute --method mean` | `imputeBetasMatrixByMean(mx, axis)` | exact (axis=probe 0.0; axis=sample float32). |
