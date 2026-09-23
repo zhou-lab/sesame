@@ -870,8 +870,10 @@ Usage:
   lack, stripped on the modern side when crossing families; each
   target probe takes the first prefix-matched source beta (NA if
   none). Array to GENOME (--to hg38) joins on coordinate, into the
-  genome's CpG universe (one row per CpG): replicate probes on one
-  CpG are averaged, rs/ch/unmapped probes are dropped and counted.
+  genome's CpG universe (one row per CpG). Only cg probes cross, by
+  ID -- rs/nv carry genotype, not methylation, wherever they map;
+  replicates on one CpG are averaged; cg probes with no CpG row are
+  dropped. Every count is reported.
   Genome to array (--platform hg38 --to MSA) takes any genome-indexed
   .cg or .cm mask down to one row per probe; that direction is
   lossy (CpGs with no probe are gone). Output is always positional
@@ -996,7 +998,7 @@ Notes:
   <h2>Other</h2>
   <details class="ref" id="ref-version">
     <summary><code class="inl">sesame version</code> <span class="m">— version, the yame it links, the store</span></summary>
-    <pre class="help"><code>sesame 2.0.0
+    <pre class="help"><code>sesame 2.1.0
     built against  YAME v1.54
     store          /home/user/.local/share/yame   ($YAME_DATA_HOME unset; yame fetch fills it)</code></pre>
   </details>
