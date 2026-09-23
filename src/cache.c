@@ -206,6 +206,25 @@ int sesame_asset_locate(const char *platform, const char *file,
         if (is_file(out)) return 0;
     }
 
+    /* The conventional store path, whether or not YAME's catalog lists the
+     * file. Not every asset we read is published with the annotation: the CNV
+     * normal panel is built locally by `make cnv-normals` and deliberately
+     * never shipped, so yame_store_resolve() classifies it NOT_CATALOGUED and
+     * returns no path -- even with the file sitting exactly where the error
+     * message says it looked. Routing every lookup through the catalog (and
+     * dropping this plain check) made `sesame cnv --platform EPICv2` fail for
+     * a panel that was present, which is how test-cnv went on skipping after
+     * the panel was built. The catalog decides freshness; the filesystem
+     * decides existence. */
+    {
+        char dir[2048];
+        sesame_store_dir(dir, sizeof dir);
+        if (dir[0]) {
+            snprintf(out, n, "%s/%s/%s", dir, platform, file);
+            if (is_file(out)) return 0;
+        }
+    }
+
     snprintf(out, n, "./%s", file);   /* cwd convenience */
     if (is_file(out)) return 0;
 
