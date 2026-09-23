@@ -1,25 +1,27 @@
-<div align="center">
+<h1 align="center">SeSAMe2</h1>
 
-# SeSAMe2
+<p align="center">
+  <a href="https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml"><img alt="build" src="https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml/badge.svg"></a>
+  <a href="https://anaconda.org/zhou-lab/sesame"><img alt="conda" src="https://img.shields.io/conda/vn/zhou-lab/sesame?label=conda"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-BSD--2--Clause%20(academic)%20%2F%20commercial-blue.svg"></a>
+  <a href="scripts/coverage.sh"><img alt="coverage" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fzwdzwd.github.io%2Fsesame-cli%2Fcoverage.json"></a>
+  <a href="https://zwdzwd.github.io/sesame-cli/"><img alt="docs" src="https://img.shields.io/badge/docs-online-blueviolet"></a>
+  <a href="include/sesame.h"><img alt="language" src="https://img.shields.io/badge/C-C11-00599C"></a>
+  <a href="https://zwdzwd.github.io/sesame-cli/"><img alt="arrays" src="https://img.shields.io/badge/arrays-EPIC%20%7C%20EPICv2%20%7C%20HM450%20%7C%20MSA-brightgreen"></a>
+  <a href="NUMERICS.md"><img alt="betas vs R" src="https://img.shields.io/badge/betas%20vs%20R-bit--identical-success"></a>
+</p>
 
-[![build](https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml/badge.svg)](https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml)
-[![conda](https://img.shields.io/conda/vn/zhou-lab/sesame?label=conda)](https://anaconda.org/zhou-lab/sesame)
-[![license](https://img.shields.io/badge/license-BSD--2--Clause%20(academic)%20%2F%20commercial-blue.svg)](LICENSE)
-[![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fzwdzwd.github.io%2Fsesame-cli%2Fcoverage.json)](scripts/coverage.sh)
-[![docs](https://img.shields.io/badge/docs-online-blueviolet)](https://zwdzwd.github.io/sesame-cli/)
-[![language](https://img.shields.io/badge/C-C11-00599C)](include/sesame.h)
-[![arrays](https://img.shields.io/badge/arrays-EPIC%20%7C%20EPICv2%20%7C%20HM450%20%7C%20MSA-brightgreen)](https://zwdzwd.github.io/sesame-cli/)
-[![vs R](https://img.shields.io/badge/betas%20vs%20R-bit--identical-success)](NUMERICS.md)
+<p align="center">
+  <b>Infinium DNA-methylation analysis as a single C binary</b><br>
+  IDAT &rarr; betas &rarr; QC, differential methylation, copy number, SNP
+  genotyping. No R, no Bioconductor, no network.
+</p>
 
-**Infinium DNA-methylation analysis as a single C binary** — IDAT → betas → QC,
-differential methylation, copy number, SNP genotyping. No R, no Bioconductor,
-no network.
-
-📖 **[Documentation](https://zwdzwd.github.io/sesame-cli/)** ·
-🔬 [Fidelity & numerics](NUMERICS.md) ·
-🔍 [Where we differ from R](DIVERGENCES.md)
-
-</div>
+<p align="center">
+  &#128214; <b><a href="https://zwdzwd.github.io/sesame-cli/">Documentation</a></b> &middot;
+  &#128300; <a href="NUMERICS.md">Fidelity &amp; numerics</a> &middot;
+  &#128269; <a href="DIVERGENCES.md">Where we differ from R</a>
+</p>
 
 SeSAMe2 is the second implementation of
 [sesame](https://github.com/zwdzwd/sesame) / `openSesame`, validated against the
