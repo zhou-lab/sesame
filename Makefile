@@ -105,6 +105,11 @@ src/mask.o: src/mask.c include/sesame.h src/internal.h | $(YAME_LIB)
 src/cgwrite.o: src/cgwrite.c include/sesame.h src/internal.h | $(YAME_LIB)
 	$(CC) -O2 -g -std=gnu11 -Wall -Iinclude $(YAME_INC) $(EXTRA_CFLAGS) -c -o $@ $<
 
+# liftover.c includes YAME headers for the genome lift (row_finder over the
+# .cr, cdata read/write); same relaxed rule as cgwrite.o.
+src/liftover.o: src/liftover.c include/sesame.h src/internal.h | $(YAME_LIB)
+	$(CC) -O2 -g -std=gnu11 -Wall -Iinclude $(YAME_INC) $(EXTRA_CFLAGS) -c -o $@ $<
+
 # attach.c also includes YAME headers; same relaxed rule as cgwrite.o.
 src/attach.o: src/attach.c include/sesame.h src/internal.h | $(YAME_LIB)
 	$(CC) -O2 -g -std=gnu11 -Wall -Iinclude $(YAME_INC) $(EXTRA_CFLAGS) -c -o $@ $<

@@ -101,7 +101,7 @@ static int usage(void)
     cmd_row("cnv",       "copy number: log2 ratio vs a normal panel + CBS");
     cmd_row("vcf",       "genotype the SNP probes into a VCF (formatVCF)");
     cmd_row("region",    "a region's betas as long-form TSV, for plotting");
-    cmd_row("mliftover", "lift a beta.cg across platforms (EPICv2/EPIC/HM450)");
+    cmd_row("mliftover", "lift a .cg/.cm across arrays, or to/from a genome (hg38)");
     cmd_row("impute",    "fill missing betas (matrix mean or genomic neighbours)");
 
     fprintf(stderr, "\n%sInspect / convert%s\n", H_TITLE, H_OFF);
@@ -280,20 +280,30 @@ static int usage_region(void)
 
 static int usage_liftover(void)
 {
-    yame_usage_head("sesame mliftover --to <platform> [options] <in.cg> <out.cg>");
+    yame_usage_head("sesame mliftover --to <platform|genome> [options] <in.cx> <out.cx>");
     fputs("\n", stderr);
-    yame_usage_text("Lift a beta.cg from one Infinium platform to another (mLiftOver), by");
-    yame_usage_text("a probe-ID prefix join: EPICv2/MSA carry a _suffix that");
-    yame_usage_text("EPIC/HM450/HM27 lack, stripped on the modern side when crossing");
-    yame_usage_text("families; each target probe takes the first prefix-matched source");
-    yame_usage_text("beta (NA if none). The output is positional to the TARGET ordering");
-    yame_usage_text("-- a valid target-platform beta.cg.");
+    yame_usage_text("Lift a .cg between row spaces (mLiftOver). Array to array joins on");
+    yame_usage_text("probe-ID prefix: EPICv2/MSA carry a _suffix that EPIC/HM450/HM27");
+    yame_usage_text("lack, stripped on the modern side when crossing families; each");
+    yame_usage_text("target probe takes the first prefix-matched source beta (NA if");
+    yame_usage_text("none). Array to GENOME (--to hg38) joins on coordinate, into the");
+    yame_usage_text("genome's CpG universe (one row per CpG): replicate probes on one");
+    yame_usage_text("CpG are averaged, rs/ch/unmapped probes are dropped and counted.");
+    yame_usage_text("Genome to array (--platform hg38 --to MSA) takes any genome-indexed");
+    yame_usage_text(".cg or .cm mask down to one row per probe; that direction is");
+    yame_usage_text("lossy (CpGs with no probe are gone). Output is always positional");
+    yame_usage_text("to the TARGET ordering.");
 
     yame_usage_sec("Options:");
-    yame_usage_opt("--to P", "target platform: EPIC | EPICv2 | HM450 | MSA");
-    yame_usage_cont("(required)");
-    yame_usage_opt("--platform P", "source platform, setting the join direction");
+    yame_usage_opt("--to P", "target: EPIC | EPICv2 | HM450 | MSA, or a genome");
+    yame_usage_cont("such as hg38 whose cpg_nocontig.cr is in the store (required)");
+    yame_usage_opt("--platform P", "source platform or genome, setting the direction");
     yame_usage_cont("(inferred from --index's filename if omitted)");
+    yame_usage_opt("--simulated-depth N", "write betas as format 3 with M+U=N on every covered");
+    yame_usage_cont("row and 0,0 elsewhere -- what a whole-genome model");
+    yame_usage_cont("(methscope classify) reads. Default: keep the input format.");
+    yame_usage_opt("--coords FILE", "the array side's <plat>.<genome>.coord.tsv.gz");
+    yame_usage_cont("(default: the store's)");
     yame_usage_opt("--index FILE", "source ordering .tsv.gz (default: the store's)");
     yame_usage_opt("--index-to FILE", "target ordering .tsv.gz (default: the store's)");
 
@@ -1643,17 +1653,19 @@ static const char *platform_from_basename(const char *path);
 static int cmd_liftover(int argc, char **argv)
 {
     const char *inpath = NULL, *outpath = NULL, *src_plat = NULL, *tgt_plat = NULL;
-    const char *src_idx = NULL, *tgt_idx = NULL;
-    char sres[4096], tres[4096];
+    const char *src_idx = NULL, *tgt_idx = NULL, *coords = NULL;
+    const char *how;                  /* for the report: how the map was built */
+    char sres[4096], tres[4096], crbuf[4096], cobuf[4096], cfile[512], help[1024];
     sesame_index_t *six = NULL, *tix = NULL;
-    double *mat = NULL, *lifted = NULL;
-    char **names = NULL;
-    int32_t nprobe = 0, nsamp = 0, i, rc = 1;
+    sesame_rowmap_t *map = NULL, *inv = NULL;
+    int depth = 0, to_genome = 0, from_genome = 0, i, rc = 1;
     sesame_err_t e;
 
     for (i = 0; i < argc; i++) {
         if (strcmp(argv[i], "--to") == 0 && i+1 < argc) tgt_plat = argv[++i];
         else if (strcmp(argv[i], "--platform") == 0 && i+1 < argc) src_plat = argv[++i];
+        else if (strcmp(argv[i], "--simulated-depth") == 0 && i+1 < argc) depth = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--coords") == 0 && i+1 < argc) coords = argv[++i];
         else if (strcmp(argv[i], "--index") == 0 && i+1 < argc) {
             src_idx = argv[++i];
             sesame__index_deprecated();
@@ -1666,50 +1678,89 @@ static int cmd_liftover(int argc, char **argv)
         else if (argv[i][0] == '-' && argv[i][1] != '\0') { fprintf(stderr, "sesame: unknown option %s\n", argv[i]); return usage_liftover(); }
         else if (!inpath) inpath = argv[i];
         else if (!outpath) outpath = argv[i];
-        else { fprintf(stderr, "sesame: mliftover takes <in.cg> <out.cg>\n"); return usage_liftover(); }
+        else { fprintf(stderr, "sesame: mliftover takes <in.cx> <out.cx>\n"); return usage_liftover(); }
     }
     if (!inpath || !outpath || !tgt_plat) {
-        fprintf(stderr, "sesame: mliftover needs --to <platform>, <in.cg> and <out.cg>\n");
+        fprintf(stderr, "sesame: mliftover needs --to <platform|genome>, <in.cx> and <out.cx>\n");
         return usage_liftover();
     }
+    if (depth < 0) { fprintf(stderr, "sesame: --simulated-depth must be >= 0\n"); return 1; }
 
-    if (!src_idx) {
-        if (!src_plat) { fprintf(stderr, "sesame: mliftover needs --platform or --index for the source\n"); return 1; }
-        if (sesame_index_locate(src_plat, sres, sizeof sres) != 0) {
-            char h[1024]; sesame_index_missing_help(src_plat, h, sizeof h);
-            fprintf(stderr, "sesame: %s\n", h); return 1;
-        }
-        src_idx = sres;
-    } else if (!src_plat) src_plat = platform_from_basename(src_idx);
-    if (!src_plat) { fprintf(stderr, "sesame: mliftover needs --platform for the source (sets the join direction)\n"); return 1; }
+    /* Every lift is one map applied by one routine; only the build differs.
+     * A name is a genome when the store holds its cpg_nocontig.cr. */
+    to_genome = sesame_asset_locate(tgt_plat, "cpg_nocontig.cr", crbuf, sizeof crbuf) == 0;
+    from_genome = !to_genome && src_plat &&
+        sesame_asset_locate(src_plat, "cpg_nocontig.cr", crbuf, sizeof crbuf) == 0;
 
-    if (!tgt_idx) {
-        if (sesame_index_locate(tgt_plat, tres, sizeof tres) != 0) {
-            char h[1024]; sesame_index_missing_help(tgt_plat, h, sizeof h);
-            fprintf(stderr, "sesame: %s\n", h); return 1;
+    if (to_genome || from_genome) {
+        /* coordinate join through the array side's coord table */
+        const char *genome  = to_genome ? tgt_plat : src_plat;
+        const char *plat    = to_genome ? src_plat : tgt_plat;
+        const char *ordpath = to_genome ? src_idx  : tgt_idx;
+        if (!plat) { fprintf(stderr, "sesame: a genome lift needs --platform for the array side\n"); return 1; }
+        if (!ordpath) {
+            if (sesame_index_locate(plat, sres, sizeof sres) != 0) {
+                sesame_index_missing_help(plat, help, sizeof help);
+                fprintf(stderr, "sesame: %s\n", help); return 1;
+            }
+            ordpath = sres;
         }
-        tgt_idx = tres;
+        if (!coords) {
+            snprintf(cfile, sizeof cfile, "%s.%s.coord.tsv.gz", plat, genome);
+            if (sesame_asset_locate(plat, cfile, cobuf, sizeof cobuf) != 0) {
+                sesame_asset_missing_help(plat, "coord table", help, sizeof help);
+                fprintf(stderr, "sesame: no %s for %s -- %s\n", cfile, plat, help); return 1;
+            }
+            coords = cobuf;
+        }
+        if (!(six = sesame_index_open(ordpath, &e))) { fprintf(stderr, "sesame: %s\n", e.msg); return 1; }
+        if (sesame_rowmap_coords(coords, sesame_index_nprobes(six), crbuf, &map, &e) != SESAME_OK) {
+            fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
+        if (from_genome) {                       /* same pairs, columns swapped */
+            if (sesame_rowmap_invert(map, &inv, &e) != SESAME_OK) { fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
+            sesame_rowmap_free(map); map = inv; inv = NULL;
+        }
+        how = "by coordinate";
+        if (!src_plat) src_plat = plat;
+    } else {
+        /* probe-ID prefix join between two array orderings */
+        if (!src_idx) {
+            if (!src_plat) { fprintf(stderr, "sesame: mliftover needs --platform or --index for the source\n"); return 1; }
+            if (sesame_index_locate(src_plat, sres, sizeof sres) != 0) {
+                sesame_index_missing_help(src_plat, help, sizeof help);
+                fprintf(stderr, "sesame: %s\n", help); return 1;
+            }
+            src_idx = sres;
+        } else if (!src_plat) src_plat = platform_from_basename(src_idx);
+        if (!src_plat) { fprintf(stderr, "sesame: mliftover needs --platform for the source (sets the join direction)\n"); return 1; }
+        if (!tgt_idx) {
+            if (sesame_index_locate(tgt_plat, tres, sizeof tres) != 0) {
+                sesame_index_missing_help(tgt_plat, help, sizeof help);
+                fprintf(stderr, "sesame: %s\n", help); return 1;
+            }
+            tgt_idx = tres;
+        }
+        if (!(six = sesame_index_open(src_idx, &e))) { fprintf(stderr, "sesame: %s\n", e.msg); return 1; }
+        if (!(tix = sesame_index_open(tgt_idx, &e))) { fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
+        if (sesame_rowmap_prefix(src_plat, six, tgt_plat, tix, &map, &e) != SESAME_OK) {
+            fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
+        how = "by probe-ID prefix";
     }
 
-    if (!(six = sesame_index_open(src_idx, &e))) { fprintf(stderr, "sesame: %s\n", e.msg); return 1; }
-    if (!(tix = sesame_index_open(tgt_idx, &e))) { fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
+    /* Always report the map: a wrong coordinate convention shows up here as
+     * "0 of N", not as an error. */
+    fprintf(stderr, "sesame: %s -> %s %s: %lld of %lld source rows map onto %lld of %lld "
+            "target rows; %lld targets take more than one source\n",
+            src_plat, tgt_plat, how, (long long)map->nsrc_mapped, (long long)map->nsrc,
+            (long long)map->ntgt_covered, (long long)map->ntgt, (long long)map->ntgt_multi);
 
-    if (sesame_read_cg(inpath, &mat, &nprobe, &nsamp, &names, &e) != SESAME_OK) {
+    if (sesame_liftover_apply(inpath, outpath, map, depth, &e) != SESAME_OK) {
         fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
-    if (nprobe != sesame_index_nprobes(six)) {
-        fprintf(stderr, "sesame: %s has %d probes but the %s ordering has %d\n",
-                inpath, nprobe, src_plat, sesame_index_nprobes(six)); goto out; }
-
-    if (sesame_liftover_betas(src_plat, six, tgt_plat, tix, mat, nsamp, &lifted, &e) != SESAME_OK) {
-        fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
-    if (sesame_write_cg(outpath, lifted, sesame_index_nprobes(tix), nsamp, names, &e) != SESAME_OK) {
-        fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
-    fprintf(stderr, "sesame: lifted %d sample(s) %s -> %s (%d -> %d probes) to %s\n",
-            nsamp, src_plat, tgt_plat, nprobe, sesame_index_nprobes(tix), outpath);
+    fprintf(stderr, "sesame: lifted %s -> %s to %s%s\n", inpath, tgt_plat, outpath,
+            depth ? " (format 3, simulated depth on every covered row; 0,0 elsewhere)" : "");
     rc = 0;
 out:
-    free(mat); free(lifted);
-    if (names) { for (i = 0; i < nsamp; i++) free(names[i]); free(names); }
+    sesame_rowmap_free(map); sesame_rowmap_free(inv);
     sesame_index_close(six); sesame_index_close(tix);
     return rc;
 }

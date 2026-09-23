@@ -1,10 +1,23 @@
 #!/bin/sh
-# mLiftOver: lift a beta.cg across platforms by the probe-ID prefix join. Tested
-# by lifting C's OWN raw betas and comparing to R's mLiftOver of the same source
-# vector -- so the mapping (target set, order, first-match choice, NA pattern) is
-# checked exactly, independent of any raw/prep divergence. Values must match
-# within the float32 .cg product precision. Needs source+target orderings (store
-# or testdata/), the yame + pipeline_dump binaries, the R oracle, and IDATs.
+# mLiftOver, two kinds of lift through one map.
+#
+# Array -> array (probe-ID prefix join): C's OWN raw betas are lifted and
+# compared to R's mLiftOver of the same source vector -- so the mapping (target
+# set, order, first-match choice, NA pattern) is checked exactly, independent of
+# any raw/prep divergence. Values must match within the float32 .cg precision.
+# Needs the R oracle.
+#
+# Array -> genome -> array (coordinate join): R's mLiftOver is array-only, so
+# there is no oracle. The reference is built here, independently, from the same
+# two store files with yame + awk -- the coord table gives each probe chrm and
+# CpG_beg (0-based), cpg_nocontig.cr gives the universe (beg0/end1), the key is
+# chrm_(beg0+1) on both sides, replicate probes on one CpG are averaged. Gates:
+# row count == the universe; covered rows identical; M within 1 of the reference
+# (its betas pass through 3-decimal text); the lift back returns every
+# non-replicate covered beta within 0.0051 (M/100 against a float32 beta).
+#
+# Needs orderings (store or testdata/), the yame + pipeline_dump binaries, IDATs;
+# each part SKIPs on its own missing inputs.
 set -eu
 
 ## The R oracle. Overridable because the binary is not called the same
@@ -29,7 +42,7 @@ trap 'rm -rf "$work"' EXIT
 [ -x "$bin" ]  || { echo "FAIL: $bin not built"; exit 1; }
 [ -x "$dump" ] || { echo "FAIL: $dump not built (make pipeline_dump)"; exit 1; }
 [ -x "$yame" ] || { echo "SKIP mLiftOver: no $yame"; exit 0; }
-command -v "$RSCRIPT" >/dev/null 2>&1 || { echo "SKIP mLiftOver: no Rscript"; exit 0; }
+have_r=0; command -v "$RSCRIPT" >/dev/null 2>&1 && have_r=1
 
 find_ord() {   # echo the first existing ordering for platform $1
     for c in "$store/$1/$1.ordering.tsv.gz" "$root/testdata/$1.ordering.tsv.gz"; do
@@ -51,6 +64,7 @@ run_pair() {
     [ -n "$so" ] && [ -n "$to" ] || { echo "SKIP $sp->$tp: missing ordering"; return; }
     if [ ! -f "$pfx"_Grn.idat ] && [ ! -f "$pfx"_Grn.idat.gz ]; then
         echo "SKIP $sp->$tp: no IDAT $pfx"; return; fi
+    [ "$have_r" = 1 ] || { echo "SKIP $sp->$tp: no Rscript"; return; }
 
     "$bin" preprocess --platform "$sp" --index "$so" --output beta --prep "" \
         --out "$work/pp" "$pfx" 2>/dev/null
@@ -91,8 +105,63 @@ PY
     then PASS=$((PASS+1)); else sed 's/^/    /' "$work/r.err" | head -4; FAIL=$((FAIL+1)); fi
 }
 
+## array -> genome -> array, against an in-test reference (no R)
+run_genome() {
+    sp=$1; rel=$2; gen=$3
+    so=$(find_ord "$sp"); pfx="$idats/$rel"
+    cr="$store/$gen/cpg_nocontig.cr"; co="$store/$sp/$sp.$gen.coord.tsv.gz"
+    [ -n "$so" ] && [ -f "$cr" ] && [ -f "$co" ] || {
+        echo "SKIP $sp->$gen: need $gen/cpg_nocontig.cr and $sp.$gen.coord.tsv.gz in the store"; return; }
+    if [ ! -f "$pfx"_Grn.idat ] && [ ! -f "$pfx"_Grn.idat.gz ]; then
+        echo "SKIP $sp->$gen: no IDAT $pfx"; return; fi
+
+    "$bin" preprocess --platform "$sp" --index "$so" --output beta --prep "" \
+        --out "$work/gp" "$pfx" 2>/dev/null
+    "$bin" mliftover --to "$gen" --platform "$sp" --index "$so" \
+        --simulated-depth 100 "$work/gp/beta.cg" "$work/wg.cg" 2>/dev/null
+    "$bin" mliftover --to "$sp" --platform "$gen" --index-to "$so" \
+        "$work/wg.cg" "$work/back.cg" 2>/dev/null
+
+    ## the reference, from the same two store files
+    zcat < "$co" | tail -n +2 | awk -F'\t' '{print $1"_"($2+1)}' > "$work/pk.txt"
+    "$yame" unpack "$work/gp/beta.cg" 2>/dev/null > "$work/b.txt"
+    paste "$work/pk.txt" "$work/b.txt" | awk -F'\t' '
+        $2!="NA" && $2>=0 {s[$1]+=$2; n[$1]++}
+        END{for(k in s) printf "%s\t%.6f\n", k, s[k]/n[k]}' > "$work/kv.txt"
+    "$yame" unpack "$cr" 2>/dev/null | awk -F'\t' '{print $1"_"($2+1)}' > "$work/uk.txt"
+    ## the small map is held in awk, the big universe is streamed -- never the
+    ## reverse (a 29M-row awk array has frozen a node before)
+    awk -F'\t' -v kv="$work/kv.txt" '
+        BEGIN{while((getline l < kv)>0){split(l,p,"\t"); v[p[1]]=p[2]}}
+        {if($0 in v){m=int(v[$0]*100+0.5); print m"\t"(100-m)} else print "0\t0"}' \
+        "$work/uk.txt" > "$work/ref.txt"
+
+    "$yame" unpack -f -1 "$work/wg.cg" 2>/dev/null > "$work/c.txt"
+    nu=$(wc -l < "$work/uk.txt"); nc=$(wc -l < "$work/c.txt")
+    r1=$(paste "$work/c.txt" "$work/ref.txt" | awk -F'\t' '
+        {a=$1+$2; b=$3+$4; if((a>0)!=(b>0)) cov++; else if(a>0){cv++; d=$1-$3; if(d<0)d=-d; if(d>mx)mx=d}}
+        END{printf "%d %d %d", cv+0, cov+0, mx+0}')
+    set -- $r1; covered=$1; covmis=$2; mxd=$3
+
+    ## the way back: M/100 against the original beta, non-replicate probes only
+    awk -F'\t' '{c[$0]++} END{for(k in c) if(c[k]>1) print k}' "$work/pk.txt" > "$work/dup.txt"
+    "$yame" unpack -f -1 "$work/back.cg" 2>/dev/null > "$work/bk.txt"
+    r2=$(paste "$work/pk.txt" "$work/b.txt" "$work/bk.txt" | awk -F'\t' -v dupf="$work/dup.txt" '
+        BEGIN{while((getline l < dupf)>0) dup[l]=1}
+        !($1 in dup) && $3+$4>0 && $2!="NA" {n++; d=$3/100-$2; if(d<0)d=-d; if(d>mx)mx=d}
+        END{printf "%d %.4f", n+0, mx+0}')
+    set -- $r2; nback=$1; mxback=$2
+
+    echo "ok   $sp -> $gen -> $sp: universe=$nu rows=$nc covered=$covered coverage-mismatch=$covmis max|dM|=$mxd; back: $nback probes max|dbeta|=$mxback"
+    if [ "$nc" -ne "$nu" ] || [ "$covmis" -ne 0 ] || [ "$mxd" -gt 1 ] || [ "$covered" -eq 0 ] \
+       || [ "$nback" -eq 0 ] || awk "BEGIN{exit !($mxback > 0.0051)}"; then
+        echo "FAIL: genome lift diverges from the reference"; FAIL=$((FAIL+1)); return; fi
+    PASS=$((PASS+1))
+}
+
 run_pair EPICv2 EPICv2/206909630040_R03C01           EPIC
 run_pair EPIC   EPIC/GSM2995280_201868590258_R01C01  EPICv2
+run_genome EPICv2 EPICv2/206909630040_R03C01 hg38
 
 echo
 echo "passed $PASS, failed $FAIL"

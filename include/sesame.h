@@ -338,6 +338,46 @@ int sesame_liftover_betas(const char *src_platform, const sesame_index_t *src_ix
                           const double *mat_in, int32_t nsamp,
                           double **mat_out, sesame_err_t *err);
 
+/* A row map: an index-to-index mapping between a SOURCE row space and a
+ * TARGET row space, as (src, tgt) pairs sorted by target. One representation
+ * for every lift -- one-to-one, many-to-one (array replicates on one CpG),
+ * one-to-many (one CpG under several probes), and misses (a row in no pair).
+ * Built three ways: sesame_rowmap_prefix (array -> array, the probe-ID prefix
+ * join of R's mLiftOver), sesame_rowmap_coords (array -> genome, joined on
+ * coordinate: <plat>.<genome>.coord.tsv.gz against <genome>/cpg_nocontig.cr,
+ * through YAME's row index; ~2 s, in memory, nothing persisted), and
+ * sesame_rowmap_invert (the same pairs with the columns swapped, which is the
+ * genome -> array map for free). The counts are for reporting: a wrong
+ * coordinate convention presents as "0 of N mapped", never as an error.
+ *
+ * sesame_liftover_apply streams any format 0/1/3/4/5/6 record (.cg or .cm)
+ * through a map: each run of equal targets is reduced onto that target --
+ * betas by the mean of non-NA sources, real M/U counts pooled, bits OR'd,
+ * 2-bit codes by max, other formats first-wins -- and a target in no pair
+ * keeps the format's "absent" (NA / 0,0 / bit 0 / code 0). Output is
+ * positional to the target space. depth > 0 writes format 3 with M+U == depth
+ * on every covered row (betas re-encoded as pseudo-counts, what a whole-genome
+ * model such as methscope reads); depth == 0 keeps the input's format. */
+typedef struct {
+    int64_t nsrc, ntgt;               /* rows in the source / target space   */
+    int64_t npair;
+    int64_t *src, *tgt;               /* the pairs, sorted by (tgt, src)     */
+    int64_t nsrc_mapped;              /* distinct sources in some pair       */
+    int64_t ntgt_covered;             /* distinct targets in some pair       */
+    int64_t ntgt_multi;               /* targets with >1 source (reduced)    */
+} sesame_rowmap_t;
+int sesame_rowmap_prefix(const char *src_platform, const sesame_index_t *src_ix,
+                         const char *tgt_platform, const sesame_index_t *tgt_ix,
+                         sesame_rowmap_t **out, sesame_err_t *err);
+int sesame_rowmap_coords(const char *coords_path, int32_t nprobe,
+                         const char *cr_path, sesame_rowmap_t **out,
+                         sesame_err_t *err);
+int sesame_rowmap_invert(const sesame_rowmap_t *in, sesame_rowmap_t **out,
+                         sesame_err_t *err);
+void sesame_rowmap_free(sesame_rowmap_t *m);
+int sesame_liftover_apply(const char *in_cx, const char *out_cx,
+                          const sesame_rowmap_t *m, int depth, sesame_err_t *err);
+
 /* imputeBetasMatrixByMean (R/impute.R): fill NaN in a sample-major matrix
  * [nsamp*nprobe] in place with axis=1 (per probe, mean across samples) or axis=2
  * (per sample, mean across probes). An all-NaN row/column is left NaN. */

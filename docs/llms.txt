@@ -88,13 +88,24 @@ exact `yame fetch` to run — sesame never downloads and never prompts.
                 by PATH (no --platform, no store lookup)
   cnv           log2 vs a normal panel, genome binning, CBS segmentation
   vcf           rs probes -> sites-only VCF (formatVCF)
-  mliftover     betas across platforms (mLiftOver)
+  mliftover     .cg/.cm across arrays, or to/from a genome (hg38) by coordinate
   impute        fill NA betas (--method mean|neighbors)
   region        <chr:beg-end> or --gene NAME -> long-form betas TSV
   deidentify    zero or reversibly scramble SNP beads in an IDAT
   attach-probe  label a positional .cg/.cm/.tsv with Probe_IDs
   idat-dump     inspect a raw .idat[.gz]
   version       version, the yame it links, the store
+
+Genome lift. `mliftover --to hg38` puts array betas into the genome's CpG
+universe (one row per CpG; 29,401,795 for hg38) so whole-genome models run on
+array data unchanged; `--platform hg38 --to MSA` brings a model's mask down to
+the array. The probe<->CpG map is built in memory each run from the store's
+<plat>.<genome>.coord.tsv.gz and <genome>/cpg_nocontig.cr -- nothing to fetch
+beyond those two. Replicates on one CpG average; rs/ch/unmapped probes drop
+(counted on stderr); genome->array is lossy. --simulated-depth N writes format
+3 with M+U=N on covered rows and 0,0 elsewhere, which is what methscope reads.
+  sesame mliftover --to hg38 --platform MSA --simulated-depth 100 beta.cg beta.hg38.cg
+  sesame mliftover --to MSA --platform hg38 model.mrmp model.MSA.mrmp
 
 ## Preprocess
 
