@@ -2,6 +2,7 @@
 # Canonical: https://zhou-lab.github.io/sesame/llms.txt
 # Human guide: https://zhou-lab.github.io/sesame/
 # Source: https://github.com/zhou-lab/sesame
+# The R package's own documentation (SeSAMe v1, 1.x): https://zhou-lab.github.io/sesame-docs/
 # For exact flags, always run: sesame <command> -h
 
 ## What it is
