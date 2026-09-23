@@ -240,10 +240,11 @@ static int lo_load_coords(const char *path, int32_t np, char ***chrm_out,
     return SESAME_OK;
 }
 
-int sesame_rowmap_coords(const char *coords_path, int32_t nprobe,
+int sesame_rowmap_coords(const char *coords_path, const sesame_index_t *ix,
                          const char *cr_path, sesame_rowmap_t **out,
                          sesame_err_t *err)
 {
+    int32_t nprobe = ix ? sesame_index_nprobes(ix) : 0;
     sesame_rowmap_t *m = NULL;
     char **chrm = NULL; long *beg = NULL;
     char crbuf[4096];
@@ -255,7 +256,7 @@ int sesame_rowmap_coords(const char *coords_path, int32_t nprobe,
     int32_t i, rc;
 
     if (err) { err->code = SESAME_OK; err->msg[0] = '\0'; }
-    if (!coords_path || !cr_path || !out || nprobe <= 0)
+    if (!coords_path || !cr_path || !out || !ix || nprobe <= 0)
         return sesame__fail(err, SESAME_ERR_IO, "null argument");
     if ((rc = lo_load_coords(coords_path, nprobe, &chrm, &beg, err)) != SESAME_OK)
         return rc;
@@ -282,6 +283,11 @@ int sesame_rowmap_coords(const char *coords_path, int32_t nprobe,
     fdr = init_finder(&cr);
     for (i = 0; i < nprobe; i++) {
         uint64_t r = 0;
+        /* cg probes only, by ID. An rs or nv probe carries a genotype, not
+         * methylation, and a multi-mapping one can land on a CpG row -- 329
+         * rs on MSA do -- so the decision is the probe's identity, never its
+         * coordinate. (ch probes cannot be CpG rows except by error.) */
+        if (strncmp(sesame_index_probe_id(ix, i), "cg", 2) != 0) { m->nsrc_skipped++; continue; }
         /* row_finder_search() exits the process on a chromosome the track does
          * not carry -- an alt/random-contig probe against cpg_nocontig.cr, which
          * drops contigs by design -- so check membership first. Such a probe

@@ -350,6 +350,14 @@ int sesame_liftover_betas(const char *src_platform, const sesame_index_t *src_ix
  * genome -> array map for free). The counts are for reporting: a wrong
  * coordinate convention presents as "0 of N mapped", never as an error.
  *
+ * The coordinate join lifts cg probes ONLY, decided by Probe_ID, never by
+ * where the probe maps: an rs probe's beta is an allele fraction and an nv
+ * probe's a variant fraction, not methylation, and a multi-mapping rs probe
+ * whose coordinate lands on a CpG row (329 on MSA, 6 on EPICv2, plus 78 nv)
+ * would otherwise write that fraction into the CpG -- or, lifting a mask
+ * the other way, take a pattern state it has no business in. Those probes
+ * are counted in nsrc_skipped, apart from the cg probes with no CpG row.
+ *
  * sesame_liftover_apply streams any format 0/1/3/4/5/6 record (.cg or .cm)
  * through a map: each run of equal targets is reduced onto that target --
  * betas by the mean of non-NA sources, real M/U counts pooled, bits OR'd,
@@ -365,13 +373,15 @@ typedef struct {
     int64_t npair;
     int64_t *src, *tgt;               /* the pairs, sorted by (tgt, src)     */
     int64_t nsrc_mapped;              /* distinct sources in some pair       */
+    int64_t nsrc_skipped;             /* sources not lifted by TYPE: a coord */
+                                      /* join lifts cg probes only, by ID    */
     int64_t ntgt_covered;             /* distinct targets in some pair       */
     int64_t ntgt_multi;               /* targets with >1 source (reduced)    */
 } sesame_rowmap_t;
 int sesame_rowmap_prefix(const char *src_platform, const sesame_index_t *src_ix,
                          const char *tgt_platform, const sesame_index_t *tgt_ix,
                          sesame_rowmap_t **out, sesame_err_t *err);
-int sesame_rowmap_coords(const char *coords_path, int32_t nprobe,
+int sesame_rowmap_coords(const char *coords_path, const sesame_index_t *ix,
                          const char *cr_path, sesame_rowmap_t **out,
                          sesame_err_t *err);
 int sesame_rowmap_invert(const sesame_rowmap_t *in, sesame_rowmap_t **out,

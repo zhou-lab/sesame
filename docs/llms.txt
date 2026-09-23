@@ -102,8 +102,10 @@ universe (one row per CpG; 29,401,795 for hg38) so whole-genome models run on
 array data unchanged; `--platform hg38 --to MSA` brings a model's mask down to
 the array. The probe<->CpG map is built in memory each run from the store's
 <plat>.<genome>.coord.tsv.gz and <genome>/cpg_nocontig.cr -- nothing to fetch
-beyond those two. Replicates on one CpG average; rs/ch/unmapped probes drop
-(counted on stderr); genome->array is lossy. --simulated-depth N writes format
+beyond those two. Only cg probes cross, decided by Probe_ID: rs/nv probes carry
+genotype, not methylation, wherever they map (329 rs on MSA land on CpG rows).
+Replicates on one CpG average; cg probes with no CpG row drop; every count is
+on stderr. genome->array is lossy. --simulated-depth N writes format
 3 with M+U=N on covered rows and 0,0 elsewhere, which is what methscope reads.
 Batch a cohort into one call with --threads N: the map (~3 s) is built once and
 shared; per record it is ~0.2 s to a genome, ~0.1 s back. Never loop over

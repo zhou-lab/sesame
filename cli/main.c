@@ -287,8 +287,10 @@ static int usage_liftover(void)
     yame_usage_text("lack, stripped on the modern side when crossing families; each");
     yame_usage_text("target probe takes the first prefix-matched source beta (NA if");
     yame_usage_text("none). Array to GENOME (--to hg38) joins on coordinate, into the");
-    yame_usage_text("genome's CpG universe (one row per CpG): replicate probes on one");
-    yame_usage_text("CpG are averaged, rs/ch/unmapped probes are dropped and counted.");
+    yame_usage_text("genome's CpG universe (one row per CpG). Only cg probes cross, by");
+    yame_usage_text("ID -- rs/nv carry genotype, not methylation, wherever they map;");
+    yame_usage_text("replicates on one CpG are averaged; cg probes with no CpG row are");
+    yame_usage_text("dropped. Every count is reported.");
     yame_usage_text("Genome to array (--platform hg38 --to MSA) takes any genome-indexed");
     yame_usage_text(".cg or .cm mask down to one row per probe; that direction is");
     yame_usage_text("lossy (CpGs with no probe are gone). Output is always positional");
@@ -1717,7 +1719,7 @@ static int cmd_liftover(int argc, char **argv)
             coords = cobuf;
         }
         if (!(six = sesame_index_open(ordpath, &e))) { fprintf(stderr, "sesame: %s\n", e.msg); return 1; }
-        if (sesame_rowmap_coords(coords, sesame_index_nprobes(six), crbuf, &map, &e) != SESAME_OK) {
+        if (sesame_rowmap_coords(coords, six, crbuf, &map, &e) != SESAME_OK) {
             fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
         if (from_genome) {                       /* same pairs, columns swapped */
             if (sesame_rowmap_invert(map, &inv, &e) != SESAME_OK) { fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
@@ -1756,6 +1758,10 @@ static int cmd_liftover(int argc, char **argv)
             "target rows; %lld targets take more than one source\n",
             src_plat, tgt_plat, how, (long long)map->nsrc_mapped, (long long)map->nsrc,
             (long long)map->ntgt_covered, (long long)map->ntgt, (long long)map->ntgt_multi);
+    if (map->nsrc_skipped)
+        fprintf(stderr, "sesame: %lld probes not lifted by type: only cg probes are (rs/nv carry "
+                "genotype, not methylation), decided by Probe_ID, not by where they map\n",
+                (long long)map->nsrc_skipped);
 
     if (sesame_liftover_apply(inpath, outpath, map, depth, nthreads, &e) != SESAME_OK) {
         fprintf(stderr, "sesame: %s\n", e.msg); goto out; }

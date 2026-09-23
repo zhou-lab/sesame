@@ -132,9 +132,12 @@ run_genome() {
 
     ## the reference, from the same two store files
     zcat < "$co" | tail -n +2 | awk -F'\t' '{print $1"_"($2+1)}' > "$work/pk.txt"
+    zcat < "$so" | tail -n +2 | cut -f1 > "$work/ids.txt"
     "$yame" unpack "$work/gp/beta.cg" 2>/dev/null > "$work/b.txt"
-    paste "$work/pk.txt" "$work/b.txt" | awk -F'\t' '
-        $2!="NA" && $2>=0 {s[$1]+=$2; n[$1]++}
+    ## cg probes only, by ID: an rs/nv probe's beta is a genotype fraction,
+    ## and a multi-mapping one can sit on a CpG row (6 rs + 78 nv on EPICv2)
+    paste "$work/ids.txt" "$work/pk.txt" "$work/b.txt" | awk -F'\t' '
+        $1 ~ /^cg/ && $3!="NA" && $3>=0 {s[$2]+=$3; n[$2]++}
         END{for(k in s) printf "%s\t%.6f\n", k, s[k]/n[k]}' > "$work/kv.txt"
     "$yame" unpack "$cr" 2>/dev/null | awk -F'\t' '{print $1"_"($2+1)}' > "$work/uk.txt"
     ## the small map is held in awk, the big universe is streamed -- never the
@@ -154,15 +157,16 @@ run_genome() {
     ## the way back: M/100 against the original beta, non-replicate probes only
     awk -F'\t' '{c[$0]++} END{for(k in c) if(c[k]>1) print k}' "$work/pk.txt" > "$work/dup.txt"
     "$yame" unpack -f -1 "$work/back.cg" 2>/dev/null > "$work/bk.txt"
-    r2=$(paste "$work/pk.txt" "$work/b.txt" "$work/bk.txt" | awk -F'\t' -v dupf="$work/dup.txt" '
+    r2=$(paste "$work/ids.txt" "$work/pk.txt" "$work/b.txt" "$work/bk.txt" | awk -F'\t' -v dupf="$work/dup.txt" '
         BEGIN{while((getline l < dupf)>0) dup[l]=1}
-        !($1 in dup) && $3+$4>0 && $2!="NA" {n++; d=$3/100-$2; if(d<0)d=-d; if(d>mx)mx=d}
-        END{printf "%d %.4f", n+0, mx+0}')
-    set -- $r2; nback=$1; mxback=$2
+        $1 !~ /^cg/ && $4+$5>0 {bad++}                     # a non-cg probe must come back 0,0
+        $1 ~ /^cg/ && !($2 in dup) && $4+$5>0 && $3!="NA" {n++; d=$4/100-$3; if(d<0)d=-d; if(d>mx)mx=d}
+        END{printf "%d %.4f %d", n+0, mx+0, bad+0}')
+    set -- $r2; nback=$1; mxback=$2; noncg=$3
 
-    echo "ok   $sp -> $gen -> $sp: universe=$nu rows=$nc covered=$covered coverage-mismatch=$covmis max|dM|=$mxd; back: $nback probes max|dbeta|=$mxback; 4 threads: $same4"
+    echo "ok   $sp -> $gen -> $sp: universe=$nu rows=$nc covered=$covered coverage-mismatch=$covmis max|dM|=$mxd; back: $nback cg probes max|dbeta|=$mxback, non-cg carrying a value=$noncg; 4 threads: $same4"
     if [ "$nc" -ne "$nu" ] || [ "$covmis" -ne 0 ] || [ "$mxd" -gt 1 ] || [ "$covered" -eq 0 ] \
-       || [ "$nback" -eq 0 ] || [ "$same4" != identical ] || awk "BEGIN{exit !($mxback > 0.0051)}"; then
+       || [ "$nback" -eq 0 ] || [ "$noncg" -ne 0 ] || [ "$same4" != identical ] || awk "BEGIN{exit !($mxback > 0.0051)}"; then
         echo "FAIL: genome lift diverges from the reference"; FAIL=$((FAIL+1)); return; fi
     PASS=$((PASS+1))
 }
