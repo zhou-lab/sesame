@@ -483,24 +483,114 @@ static int lo_apply_one(cdata_t c, const sesame_rowmap_t *m, int depth,
     return SESAME_OK;
 }
 
-/* The work-sharing context. Workers take the next record under the mutex and
- * process it with nothing else shared; the first error stops the rest. */
+/* ------------------------------------------------ BGZF, in memory --- */
+
+/* One BGZF block, byte for byte what YAME's bgzf.c emits: its 18-byte header
+ * (gzip magic, the BC extra field, the block length at [16..17]), a raw
+ * deflate at the writer's default level, then CRC32 and ISIZE. Reproducing it
+ * here is what lets a worker compress its record into a buffer instead of a
+ * file, and still hand the writer bytes indistinguishable from bgzf_write's. */
+static const uint8_t lo_gmagic[18] =
+    "\037\213\010\4\0\0\0\0\0\377\6\0\102\103\2\0\0\0";
+
+static int lo_bgzf_block(uint8_t *dst, int *dlen, const uint8_t *src, int slen)
+{
+    z_stream zs;
+    uint32_t crc;
+    memset(&zs, 0, sizeof zs);
+    zs.next_in = (Bytef *)src; zs.avail_in = (uInt)slen;
+    zs.next_out = dst + 18; zs.avail_out = (uInt)(*dlen - 18 - 8);
+    if (deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY) != Z_OK) return -1;
+    if (deflate(&zs, Z_FINISH) != Z_STREAM_END) { deflateEnd(&zs); return -1; }
+    if (deflateEnd(&zs) != Z_OK) return -1;
+    *dlen = (int)zs.total_out + 18 + 8;
+    memcpy(dst, lo_gmagic, 18);
+    dst[16] = (uint8_t)((*dlen - 1) & 0xff); dst[17] = (uint8_t)(((*dlen - 1) >> 8) & 0xff);
+    crc = (uint32_t)crc32(crc32(0L, NULL, 0L), (const Bytef *)src, (uInt)slen);
+    dst[*dlen-8] = (uint8_t)(crc & 0xff); dst[*dlen-7] = (uint8_t)((crc >> 8) & 0xff);
+    dst[*dlen-6] = (uint8_t)((crc >> 16) & 0xff); dst[*dlen-5] = (uint8_t)((crc >> 24) & 0xff);
+    dst[*dlen-4] = (uint8_t)(slen & 0xff); dst[*dlen-3] = (uint8_t)((slen >> 8) & 0xff);
+    dst[*dlen-2] = (uint8_t)((slen >> 16) & 0xff); dst[*dlen-1] = (uint8_t)((slen >> 24) & 0xff);
+    return 0;
+}
+
+/* A byte string as a BGZF stream: 0xff00-byte blocks, the way bgzf_write
+ * fills them, a block shrunk on the rare chunk deflate cannot fit. n == 0
+ * gives the standard 28-byte empty block -- the EOF marker. */
+static int lo_bgzf_pack(const uint8_t *src, size_t n, uint8_t **out, size_t *outn)
+{
+    size_t cap = n + n / 4 + 1024, len = 0, off = 0;
+    uint8_t *buf = (uint8_t *)malloc(cap);
+    if (!buf) return -1;
+    do {
+        int slen = (int)(n - off < 0xff00 ? n - off : 0xff00), dlen;
+        for (;;) {
+            if (len + 0x10000 > cap) {
+                uint8_t *nb = (uint8_t *)realloc(buf, cap = cap * 2 + 0x10000);
+                if (!nb) { free(buf); return -1; }
+                buf = nb;
+            }
+            dlen = 0x10000;
+            if (lo_bgzf_block(buf + len, &dlen, src + off, slen) == 0) break;
+            if (slen < 1024) { free(buf); return -1; }
+            slen /= 2;                               /* incompressible: shrink */
+        }
+        len += (size_t)dlen; off += (size_t)slen;
+    } while (off < n);
+    *out = buf; *outn = len;
+    return 0;
+}
+
+/* The record as cdata_write1 lays it out: signature, format, row count,
+ * payload -- then packed as its own block-aligned BGZF stream. */
+static int lo_record_bytes(const cdata_t *o, uint8_t **out, size_t *outn)
+{
+    size_t nb = (size_t)cdata_nbytes(o), rawn = 8 + 1 + 8 + nb;
+    uint8_t *raw = (uint8_t *)malloc(rawn);
+    uint64_t sig = CDSIG, n = o->n;
+    int rc;
+    if (!raw) return -1;
+    memcpy(raw, &sig, 8); raw[8] = (uint8_t)o->fmt; memcpy(raw + 9, &n, 8);
+    memcpy(raw + 17, o->s, nb);
+    rc = lo_bgzf_pack(raw, rawn, out, outn);
+    free(raw);
+    return rc;
+}
+
+/* ------------------------------------------------- the work sharing --- */
+
+/* Workers take the next record under the mutex and finish it -- inflate,
+ * reduce through the read-only map, pack, deflate -- into their own slot,
+ * then signal. The calling thread is the dumper: it waits on slot i, writes
+ * it, frees it, and moves to i+1 -- output order is the slot index, writing
+ * overlaps compression, no record is held longer than the dumper's lag, and
+ * the call returns when the last record is on disk. Records are handed out
+ * one at a time from a shared counter, never pre-split, so a slow record
+ * delays only itself and no worker sits idle while others have work. The
+ * first error stops everyone. */
+typedef struct { uint8_t *buf; size_t len; int ready; } lo_slot;
+
 typedef struct {
     const sesame_rowmap_t *m;
     int depth;
     const char *in_cx, *out_cx;
     cdata_t *in;               /* compressed input blocks; consumed as processed */
+    lo_slot *slot;             /* per record: its BGZF bytes, once ready        */
+    int64_t *offs;             /* per record: virtual offset, set by the writer */
+    FILE *of;
     int32_t nrec, next;
     int failed;
     sesame_err_t err;
     pthread_mutex_t mu;
+    pthread_cond_t cv;
 } lo_ctx;
 
-/* Where record i is written by its worker: a complete BGZF stream of its own,
- * produced by YAME's writer with the deflate done on the worker's thread. */
-static void lo_part_name(char *buf, size_t n, const char *out_cx, int32_t i)
+static void lo_fail(lo_ctx *x, const sesame_err_t *e)
 {
-    snprintf(buf, n, "%s.%d.part", out_cx, (int)i);
+    pthread_mutex_lock(&x->mu);
+    if (!x->failed) { x->failed = 1; x->err = *e; }
+    pthread_cond_broadcast(&x->cv);
+    pthread_mutex_unlock(&x->mu);
 }
 
 static void *lo_worker(void *arg)
@@ -509,32 +599,51 @@ static void *lo_worker(void *arg)
     for (;;) {
         int32_t i;
         sesame_err_t e;
+        cdata_t o;
+        uint8_t *buf = NULL; size_t len = 0;
+        memset(&o, 0, sizeof o);
         pthread_mutex_lock(&x->mu);
         if (x->failed || x->next >= x->nrec) { pthread_mutex_unlock(&x->mu); return NULL; }
         i = x->next++;
         pthread_mutex_unlock(&x->mu);
-        cdata_t o;
-        char part[4096];
-        BGZF *tf;
-        int bad = lo_apply_one(x->in[i], x->m, x->depth, x->in_cx, &o, &e) != SESAME_OK;
-        x->in[i].s = NULL; x->in[i].n = 0;                   /* consumed either way */
-        if (!bad) {
-            lo_part_name(part, sizeof part, x->out_cx, i);
-            if (!(tf = bgzf_open2(part, "w"))) {
-                bad = sesame__fail(&e, SESAME_ERR_IO, "cannot write %s", part) != SESAME_OK;
-            } else {
-                cdata_write1(tf, &o);                        /* the deflate, here */
-                bgzf_close(tf);
-            }
-            free(o.s);
+        if (lo_apply_one(x->in[i], x->m, x->depth, x->in_cx, &o, &e) != SESAME_OK) {
+            x->in[i].s = NULL; x->in[i].n = 0;               /* freed by lo_apply_one */
+            lo_fail(x, &e); return NULL;
         }
-        if (bad) {
-            pthread_mutex_lock(&x->mu);
-            if (!x->failed) { x->failed = 1; x->err = e; }
-            pthread_mutex_unlock(&x->mu);
-            return NULL;
+        x->in[i].s = NULL; x->in[i].n = 0;                   /* consumed */
+        if (lo_record_bytes(&o, &buf, &len) != 0) {
+            free(o.s); sesame__fail(&e, SESAME_ERR_NOMEM, "oom packing record %d", (int)i);
+            lo_fail(x, &e); return NULL;
         }
+        free(o.s);
+        pthread_mutex_lock(&x->mu);
+        x->slot[i].buf = buf; x->slot[i].len = len; x->slot[i].ready = 1;
+        pthread_cond_broadcast(&x->cv);
+        pthread_mutex_unlock(&x->mu);
     }
+}
+
+static void *lo_writer(void *arg)
+{
+    lo_ctx *x = (lo_ctx *)arg;
+    int64_t pos = 0;
+    int32_t i;
+    for (i = 0; i < x->nrec; i++) {
+        uint8_t *buf; size_t len;
+        pthread_mutex_lock(&x->mu);
+        while (!x->slot[i].ready && !x->failed) pthread_cond_wait(&x->cv, &x->mu);
+        if (x->failed) { pthread_mutex_unlock(&x->mu); return NULL; }
+        buf = x->slot[i].buf; len = x->slot[i].len; x->slot[i].buf = NULL;
+        pthread_mutex_unlock(&x->mu);
+        x->offs[i] = pos << 16;                              /* block-aligned */
+        if (fwrite(buf, 1, len, x->of) != len) {
+            sesame_err_t e; sesame__fail(&e, SESAME_ERR_IO, "short write to %s", x->out_cx);
+            free(buf); lo_fail(x, &e); return NULL;
+        }
+        pos += (int64_t)len;
+        free(buf);
+    }
+    return NULL;
 }
 
 int sesame_liftover_apply(const char *in_cx, const char *out_cx,
@@ -546,11 +655,8 @@ int sesame_liftover_apply(const char *in_cx, const char *out_cx,
     char inbuf[4096];
     lo_ctx x;
     pthread_t *th = NULL;
-    FILE *of = NULL;
-    int64_t *offs = NULL, pos = 0;
-    uint8_t eof[28];
-    int have_eof = 0;
     char **names = NULL;
+    uint8_t *eof = NULL; size_t eofn = 0;
     int32_t cap = 0, i, spawned = 0;
     int T, rc = SESAME_OK;
 
@@ -561,13 +667,14 @@ int sesame_liftover_apply(const char *in_cx, const char *out_cx,
     memset(&x, 0, sizeof x);
     x.m = m; x.depth = depth; x.in_cx = in_cx; x.out_cx = out_cx;
     pthread_mutex_init(&x.mu, NULL);
+    pthread_cond_init(&x.cv, NULL);
 
-    /* 1. read every compressed block up front (sequential, small: ~1 MB per
+    /* 1. every compressed input block up front (sequential, small: ~1 MB per
      *    array record, ~0.6 MB per genome record) so the workers never touch
      *    the input stream */
     snprintf(inbuf, sizeof inbuf, "%s", in_cx);
     cf = open_cfile(inbuf);
-    if (!cf.fh) { pthread_mutex_destroy(&x.mu); return sesame__fail(err, SESAME_ERR_IO, "cannot open %s", in_cx); }
+    if (!cf.fh) { rc = sesame__fail(err, SESAME_ERR_IO, "cannot open %s", in_cx); goto out0; }
     sn = loadSampleNamesFromIndex(inbuf);
     for (;;) {
         cdata_t c = read_cdata1(&cf);
@@ -579,73 +686,42 @@ int sesame_liftover_apply(const char *in_cx, const char *out_cx,
         x.in[x.nrec++] = c;
     }
     bgzf_close(cf.fh);
+    x.slot  = (lo_slot *)calloc((size_t)(x.nrec ? x.nrec : 1), sizeof(lo_slot));
+    x.offs  = (int64_t *)calloc((size_t)(x.nrec ? x.nrec : 1), sizeof(int64_t));
+    names   = (char **)calloc((size_t)(x.nrec ? x.nrec : 1), sizeof(char *));
+    if (!x.slot || !x.offs || !names) { rc = sesame__fail(err, SESAME_ERR_NOMEM, "oom"); goto out; }
+    if (!(x.of = fopen(out_cx, "wb"))) {
+        rc = sesame__fail(err, SESAME_ERR_IO, "cannot open %s for writing", out_cx); goto out;
+    }
 
-    /* 2. the records, across T workers sharing the one map */
+    /* 2. T workers sharing the one map; this thread is the dumper */
     if (nthreads <= 0) { long n = sysconf(_SC_NPROCESSORS_ONLN); nthreads = n > 0 ? (int)n : 1; }
     T = nthreads < x.nrec ? nthreads : x.nrec;
-    if (T < 1) T = 1;
-    th = (pthread_t *)calloc((size_t)T, sizeof(pthread_t));
-    if (th) for (i = 0; i < T - 1; i++) if (pthread_create(&th[spawned], NULL, lo_worker, &x) == 0) spawned++;
-    lo_worker(&x);                                             /* this thread works too */
+    th = (pthread_t *)calloc((size_t)(T > 0 ? T : 1), sizeof(pthread_t));
+    if (th) for (i = 0; i < T; i++) if (pthread_create(&th[spawned], NULL, lo_worker, &x) == 0) spawned++;
+    if (x.nrec > 0 && spawned == 0) {
+        sesame_err_t e; sesame__fail(&e, SESAME_ERR_IO, "cannot start a worker thread"); lo_fail(&x, &e);
+    }
+    lo_writer(&x);                                             /* returns after the last record, or on failure */
     for (i = 0; i < spawned; i++) pthread_join(th[i], NULL);
     if (x.failed) { if (err) *err = x.err; rc = x.err.code ? x.err.code : SESAME_ERR_IO; goto out; }
 
-    /* 3. stitch the parts in input order. Each part is a complete BGZF stream
-     * from YAME's writer; drop its trailing empty EOF block (gzip magic, BSIZE
-     * 27, ISIZE 0 -- recognised structurally, not by a constant) and append
-     * one at the end. Records are therefore block-aligned: a valid BGZF file,
-     * a record's .idx offset its block address with no in-block part, and the
-     * bytes identical at any thread count, since a record's bytes never depend
-     * on which thread produced them. */
-    offs  = (int64_t *)malloc((size_t)(x.nrec ? x.nrec : 1) * sizeof(int64_t));
-    names = (char **)calloc((size_t)(x.nrec ? x.nrec : 1), sizeof(char *));
-    if (!offs || !names) { rc = sesame__fail(err, SESAME_ERR_NOMEM, "oom"); goto out; }
-    if (!(of = fopen(out_cx, "wb"))) {
-        rc = sesame__fail(err, SESAME_ERR_IO, "cannot open %s for writing", out_cx); goto out;
+    /* 3. the EOF marker, the names */
+    if (lo_bgzf_pack((const uint8_t *)"", 0, &eof, &eofn) != 0 || fwrite(eof, 1, eofn, x.of) != eofn) {
+        rc = sesame__fail(err, SESAME_ERR_IO, "cannot finish %s", out_cx); goto out;
     }
-    for (i = 0; i < x.nrec; i++) {
-        char part[4096];
-        FILE *pf;
-        long sz, keep;
-        uint8_t *buf;
-        lo_part_name(part, sizeof part, out_cx, i);
-        if (!(pf = fopen(part, "rb"))) { rc = sesame__fail(err, SESAME_ERR_IO, "lost %s", part); goto out; }
-        fseek(pf, 0, SEEK_END); sz = ftell(pf); rewind(pf);
-        buf = (uint8_t *)malloc((size_t)(sz > 0 ? sz : 1));
-        if (!buf || (sz > 0 && fread(buf, 1, (size_t)sz, pf) != (size_t)sz)) {
-            fclose(pf); free(buf); rc = sesame__fail(err, SESAME_ERR_IO, "cannot read %s", part); goto out;
-        }
-        fclose(pf); unlink(part);
-        keep = sz;
-        if (sz >= 28) {
-            const uint8_t *t = buf + sz - 28;
-            int empty = t[0] == 0x1f && t[1] == 0x8b && t[2] == 8 && t[3] == 4
-                     && t[16] == 27 && t[17] == 0                      /* BSIZE-1 */
-                     && t[24] == 0 && t[25] == 0 && t[26] == 0 && t[27] == 0;  /* ISIZE */
-            if (empty) { keep = sz - 28; if (!have_eof) { memcpy(eof, t, 28); have_eof = 1; } }
-        }
-        offs[i] = pos << 16;
-        if (keep > 0 && fwrite(buf, 1, (size_t)keep, of) != (size_t)keep) {
-            free(buf); rc = sesame__fail(err, SESAME_ERR_IO, "short write to %s", out_cx); goto out;
-        }
-        pos += keep;
-        free(buf);
-        names[i] = strdup(i < sn.n ? sn.s[i] : "");
-    }
-    if (have_eof) fwrite(eof, 1, 28, of);
-    fclose(of); of = NULL;
-    lo_write_idx(out_cx, names, offs, x.nrec);
+    fclose(x.of); x.of = NULL;
+    for (i = 0; i < x.nrec; i++) names[i] = strdup(i < sn.n ? sn.s[i] : "");
+    lo_write_idx(out_cx, names, x.offs, x.nrec);
 out:
-    if (of) fclose(of);
-    for (i = 0; i < x.nrec; i++) {
-        char part[4096];
-        if (x.in[i].s) free_cdata(&x.in[i]);
-        lo_part_name(part, sizeof part, out_cx, i); unlink(part);   /* leftovers on error */
-    }
-    free(x.in); free(th);
+    if (x.of) { fclose(x.of); unlink(out_cx); }              /* no half files */
+    for (i = 0; i < x.nrec; i++) { if (x.in[i].s) free_cdata(&x.in[i]); if (x.slot) free(x.slot[i].buf); }
+    free(x.in); free(x.slot); free(x.offs); free(th); free(eof);
     if (names) for (i = 0; i < x.nrec; i++) free(names[i]);
-    free(names); free(offs);
+    free(names);
     cleanSampleNames2(sn);
+out0:
+    pthread_cond_destroy(&x.cv);
     pthread_mutex_destroy(&x.mu);
     return rc;
 }
