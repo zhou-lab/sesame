@@ -12,12 +12,16 @@
  * The YAME per-format rendering mirrors `yame unpack`'s print_cdata1 (fmt0 mask
  * bit, fmt3 M/U or beta, fmt4 float, fmt5 ternary, fmt1/2 raw), except floats
  * print at full precision rather than 3 decimals since the .cg already stores
- * float32. Links YAME directly (both AGPL), same as cgwrite.c.
+ * float32. Links YAME directly, same as cgwrite.c.
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * SPDX-License-Identifier: LicenseRef-CHOP-Academic-BSD-2-Clause
  *
  * Copyright (C) 2026-present The Children's Hospital of Philadelphia
- * Part of sesame-cli, licensed under AGPL-3.0-or-later; see LICENSE.
+ *
+ * Use of this software is available to academic and non-profit institutions
+ * for research purposes under the 2-Clause BSD License; for use or transfers
+ * to commercial entities, inquire with Dr. Wanding Zhou at zhouw3@chop.edu.
+ * See the LICENSE file at the root of the repository for the full terms.
  */
 #include "sesame.h"
 #include "internal.h"

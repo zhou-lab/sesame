@@ -5,8 +5,14 @@
  *   normexp_test normexp   < "mu sigma alpha x" per line -> signal per line
  *   normexp_test huber      < one value per line (a vector) -> "mu<TAB>s<TAB>mad0"
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * SPDX-License-Identifier: LicenseRef-CHOP-Academic-BSD-2-Clause
+ *
  * Copyright (C) 2026-present The Children's Hospital of Philadelphia
+ *
+ * Use of this software is available to academic and non-profit institutions
+ * for research purposes under the 2-Clause BSD License; for use or transfers
+ * to commercial entities, inquire with Dr. Wanding Zhou at zhouw3@chop.edu.
+ * See the LICENSE file at the root of the repository for the full terms.
  */
 #include "internal.h"
 #include <stdio.h>

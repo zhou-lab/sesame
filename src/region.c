@@ -5,10 +5,14 @@
  * positional in the same ordering, so probe i lines up across all three. This is
  * the plot-ready feed for a locus / region view (e.g. cinderplot).
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * SPDX-License-Identifier: LicenseRef-CHOP-Academic-BSD-2-Clause
  *
  * Copyright (C) 2026-present The Children's Hospital of Philadelphia
- * Part of sesame-cli, licensed under AGPL-3.0-or-later; see LICENSE.
+ *
+ * Use of this software is available to academic and non-profit institutions
+ * for research purposes under the 2-Clause BSD License; for use or transfers
+ * to commercial entities, inquire with Dr. Wanding Zhou at zhouw3@chop.edu.
+ * See the LICENSE file at the root of the repository for the full terms.
  */
 #include "sesame.h"
 #include "internal.h"

@@ -3,10 +3,14 @@
  * Each one replicates a specific R semantic exactly; the comments say which,
  * because "close enough" here shows up as a different beta.
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * SPDX-License-Identifier: LicenseRef-CHOP-Academic-BSD-2-Clause
  *
  * Copyright (C) 2026-present The Children's Hospital of Philadelphia
- * Part of sesame-cli, licensed under AGPL-3.0-or-later; see LICENSE.
+ *
+ * Use of this software is available to academic and non-profit institutions
+ * for research purposes under the 2-Clause BSD License; for use or transfers
+ * to commercial entities, inquire with Dr. Wanding Zhou at zhouw3@chop.edu.
+ * See the LICENSE file at the root of the repository for the full terms.
  */
 #include "internal.h"
 
@@ -98,9 +102,10 @@ double sesame__median_sorted(const double *x, int32_t n)
  *
  * CLEAN-ROOM, characterized purely by black-box probing.
  *
- * Now that sesame-cli is AGPL, vendoring preprocessCore's qnorm.c would be
- * legal (LGPL is upward-compatible with GPL/AGPL) and would buy bit-exactness.
- * It is kept clean-room for engineering reasons, not licensing ones: the
+ * Vendoring preprocessCore's qnorm.c would buy bit-exactness but is not open
+ * to us: it is LGPL, and sesame-cli is BSD-2 with commercial licensing on
+ * inquiry, so pulling it in would impose LGPL obligations on a work we
+ * relicense. The clean-room stands on its own engineering merits anyway: the
  * clean-room already agrees to ~2 ULP, it is ~40 lines, and vendoring would pull
  * in an LGPL dependency and preprocessCore's LinkingTo: plumbing. See NUMERICS.md
  * (D8). Observations:

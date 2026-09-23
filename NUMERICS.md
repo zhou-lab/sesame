@@ -53,17 +53,18 @@ arbitrary-precision oracle showing sesame is closer to truth.
 ### D8 — the one difference I could not eliminate, and why
 
 `normalize.quantiles.use.target` is the only compiled third-party dependency in
-the QCDPB path. preprocessCore is `LGPL (>= 2)`; sesame-cli is AGPL-3.0-or-later.
+the QCDPB path. preprocessCore is `LGPL (>= 2)`; SeSAMe2 is 2-Clause BSD for
+academic and non-profit research, with commercial use by inquiry.
 
-**Since sesame-cli went AGPL (2026-07-17), vendoring `qnorm.c` is now legally
-open:** LGPL is upward-compatible with GPL/AGPL (a recipient may elect LGPL-3,
-which is GPL-3 plus permissions and thus absorbable into an AGPL-3 work), and
-AGPL already requires shipping complete source, so LGPL's relink obligation is
-moot. So this entry could be *erased* by vendoring preprocessCore's `qnorm.c`
-for bit-exactness.
+**Vendoring `qnorm.c` would buy bit-exactness and is not open to us.** An
+earlier version of this section argued the opposite, on the grounds that LGPL
+is absorbable into an AGPL work — true while the project was AGPL-3.0-or-later,
+and false since the 2026-09-22 relicensing. Pulling LGPL code into a work we
+relicense commercially would impose LGPL obligations on that path, so the
+question is closed on licensing grounds before engineering ones are reached.
 
-**It is deliberately kept clean-room anyway**, for engineering reasons rather
-than licensing ones:
+**The clean-room stands on its own merits regardless**, which is why the
+decision does not change with the licence:
 
 - the clean-room already agrees with R to ~2 ULP (measured below) — biologically
   and numerically meaningless;
@@ -113,9 +114,9 @@ in this implementation, and neither result is "more correct" than the other.
 ## Mask lineage — Q is not bit-identical to R, by data version
 
 The `Q` step (qualityMask) reads the recommended mask sets from the platform's
-YAME `.cm` in the store. sesame-cli links YAME directly (both are AGPL-3.0, same
-author) and reads the `.cm` in-process via the YAME C API -- no `yame` binary at
-runtime. A probe is masked iff it is set in any of `recommendedMaskNames(platform)` — `M_1baseSwitchSNPcommon_5pt`,
+YAME `.cm` in the store. SeSAMe2 links YAME directly (both carry the same CHOP
+academic BSD-2 terms, same author) and reads the `.cm` in-process via the YAME
+C API -- no `yame` binary at runtime. A probe is masked iff it is set in any of `recommendedMaskNames(platform)` — `M_1baseSwitchSNPcommon_5pt`,
 `M_2extBase_SNPcommon_5pt`, `M_mapping`, `M_nonuniq`, `M_SNPcommon_5pt` for MSA.
 
 sesame-cli's `Q` is verified **self-consistent**: it masks exactly the yame

@@ -31,8 +31,9 @@ CFLAGS  += $(EXTRA_CFLAGS)
 LDFLAGS += $(EXTRA_LDFLAGS)
 
 # --- YAME: linked directly for reading .cm masks and for the shared asset
-#     store (both AGPL). Built from the pinned submodule so the static lib never
-#     goes stale. ---
+#     store. Both carry the same CHOP academic BSD-2 terms, which is what lets
+#     us link it in-process. Built from the pinned submodule so the static lib
+#     never goes stale. ---
 YAME_DIR := YAME
 YAME_LIB := $(YAME_DIR)/libyame.a
 HTSLIB   := $(YAME_DIR)/htslib/libhts.a

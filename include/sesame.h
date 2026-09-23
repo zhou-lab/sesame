@@ -3,10 +3,14 @@
  * A standalone C implementation of sesame's basic Infinium preprocessing.
  * See NUMERICS.md for documented divergences from the R implementation.
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * SPDX-License-Identifier: LicenseRef-CHOP-Academic-BSD-2-Clause
  *
  * Copyright (C) 2026-present The Children's Hospital of Philadelphia
- * Part of sesame-cli, licensed under AGPL-3.0-or-later; see LICENSE.
+ *
+ * Use of this software is available to academic and non-profit institutions
+ * for research purposes under the 2-Clause BSD License; for use or transfers
+ * to commercial entities, inquire with Dr. Wanding Zhou at zhouw3@chop.edu.
+ * See the LICENSE file at the root of the repository for the full terms.
  */
 #ifndef SESAME_H
 #define SESAME_H
@@ -231,7 +235,7 @@ sesame_sigdf_t *sesame_sigdf_dup(const sesame_sigdf_t *sdf);
 /* Q -- load the recommended quality mask for a platform as a 0/1 vector aligned
  * to the ordering (1 = masked). Shells out to the `yame` binary to read the .cm
  * mask in the store; *out is malloc'd (caller frees), *out_n is the probe count.
- * yame is invoked as a separate process, so its AGPL code never links here. */
+ * yame runs as a separate process here; other paths link libyame directly. */
 int sesame_quality_mask(const char *platform, const char *maskpath,
                         uint8_t **out, int32_t *out_n, sesame_err_t *err);
 

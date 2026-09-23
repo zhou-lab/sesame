@@ -1,12 +1,16 @@
 /* cgwrite.c -- write per-probe values as a YAME format-4 .cg file (one float32
  * per probe, NA encoded as -1.0, RLE over NA runs), plus a companion .idx of
- * "<sample>\t<bgzf-offset>" lines. Links YAME directly (both AGPL), same as the
- * mask reader.
+ * "<sample>\t<bgzf-offset>" lines. Links YAME directly, same as the mask
+ * reader.
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * SPDX-License-Identifier: LicenseRef-CHOP-Academic-BSD-2-Clause
  *
  * Copyright (C) 2026-present The Children's Hospital of Philadelphia
- * Part of sesame-cli, licensed under AGPL-3.0-or-later; see LICENSE.
+ *
+ * Use of this software is available to academic and non-profit institutions
+ * for research purposes under the 2-Clause BSD License; for use or transfers
+ * to commercial entities, inquire with Dr. Wanding Zhou at zhouw3@chop.edu.
+ * See the LICENSE file at the root of the repository for the full terms.
  */
 #include "sesame.h"
 #include "internal.h"
