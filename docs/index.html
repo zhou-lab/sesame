@@ -42,6 +42,17 @@
   .tab:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;
     border-radius:6px}
   .panel.hidden{display:none}
+  pre.help{font-size:.78rem}
+  details.ref summary{cursor:pointer;font-size:.97rem;font-weight:600;letter-spacing:-.01em;list-style:none}
+  details.ref summary::before{content:"▸ ";color:var(--muted)}
+  details.ref[open] summary::before{content:"▾ "}
+  details.ref summary::-webkit-details-marker{display:none}
+  details.ref summary .m{color:var(--muted);font-weight:400;font-size:.79rem}
+  details.ref{margin:6px 0}
+  details.ref pre.help{margin-top:8px}
+  details.ref:target{outline:2px solid var(--accent);outline-offset:2px}
+  a.sub{text-decoration:none}
+  a.sub:hover{text-decoration:underline}
   @media print{.tabs{display:none}.panel{display:block!important}}
   .titlerow{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}
   /* "built against | YAME vX.YZ" pill on the title row. The version is filled
@@ -242,6 +253,8 @@
     aria-controls="usage" aria-selected="true">Usage</button>
   <button class="tab" type="button" role="tab" id="tab-custom" tabindex="-1"
     aria-controls="custom-array" aria-selected="false">Custom array</button>
+  <button class="tab" type="button" role="tab" id="tab-reference" tabindex="-1"
+    aria-controls="panel-reference" aria-selected="false">Reference</button>
 </nav>
 
 <div class="panel" id="usage" role="tabpanel" aria-labelledby="tab-use">
@@ -288,10 +301,10 @@ hg38/  <span class="cm"># genome tracks</span>
     <p><code class="inl">QCDPB</code> (openSesame default) over a cohort in one process → YAME
       <code class="inl">.cg</code> + <code class="inl">qc.tsv</code>.</p>
     <pre><code><span class="cm"># a folder of IDATs, searched recursively</span>
-sesame <span class="sub">preprocess</span> --out out/ in/
+sesame <a class="sub" href="#ref-preprocess">preprocess</a> --out out/ in/
 
 <span class="cm"># or explicit prefixes (just betas)</span>
-sesame <span class="sub">preprocess</span> --output beta --out out/ \
+sesame <a class="sub" href="#ref-preprocess">preprocess</a> --output beta --out out/ \
   idat_prefix_1 idat_prefix_2</code></pre>
     <p style="margin-top:11px">…writes one <code class="inl">.cg</code> per output over the cohort
       (each with a <code class="inl">.cg.idx</code> of sample names) + <code class="inl">qc.tsv</code>:</p>
@@ -333,20 +346,20 @@ yame unpack beta.cg | cinderplot --no-header \
       <b>ordering table</b>, which is what keeps the files small and byte-for-byte
       alignable: stack N samples into a matrix by column with no key-matching.
       <code class="inl">attach-probe</code> joins the two back into a labelled TSV.</p>
-    <pre><code>$ sesame <span class="sub">attach-probe</span> out/beta.cg
+    <pre><code>$ sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> out/beta.cg
 Probe_ID          206909630040_R03C01
 cg00000029_TC21   0.9124
 cg00000769_BC11   0.0331
 <span class="cm"># the ordering is inferred from the row count -- each</span>
 <span class="cm"># platform's is a distinct length. Name it if you'd rather:</span>
-$ sesame <span class="sub">attach-probe</span> --platform EPICv2 out/beta.cg
+$ sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> --platform EPICv2 out/beta.cg
 <span class="cm"># --all for every sample column (matrix)</span></code></pre>
   </section>
 
   <section class="card">
     <h2>Peek at a raw IDAT <span class="m">— idat-dump</span></h2>
     <p>The bead-level record as Illumina wrote it, before any of it becomes a probe.</p>
-    <pre><code>$ sesame <span class="sub">idat-dump</span> --tsv sample_Grn.idat.gz
+    <pre><code>$ sesame <a class="sub" href="#ref-idat-dump">idat-dump</a> --tsv sample_Grn.idat.gz
 <span class="cm"># rows only: addr, mean, sd, nbeads. The header</span>
 <span class="cm"># belongs to the summary form (no --tsv).</span>
 10600313   4821  118  12
@@ -365,11 +378,11 @@ $ sesame <span class="sub">attach-probe</span> --platform EPICv2 out/beta.cg
       <div class="shot" tabindex="0">
         <img src="figures/qc_dyebias_qq.png" alt="Dye bias Q-Q plot, Infinium-I red versus green signal">
         <button class="zoom" type="button" data-full="figures/qc_dyebias_qq.png" title="expand">⤢</button>
-        <div class="code"><pre><code>sesame <span class="sub">preprocess</span> --prep C --output intensity --out qc/ $PFX
+        <div class="code"><pre><code>sesame <a class="sub" href="#ref-preprocess">preprocess</a> --prep C --output intensity --out qc/ $PFX
 
 <span class="cm"># --with col carries the ordering's channel through; then pool each</span>
 <span class="cm"># channel's in-band {M,U} and read off a matched quantile grid</span>
-sesame <span class="sub">attach-probe</span> --with col qc/intensity.cg \
+sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> --with col qc/intensity.cg \
 | <b>tabl</b> filter 'col=="R" || col=="G"' \
 | <b>tabl</b> longer -c 3:4 -v sig \
 | <b>tabl</b> quantile -g col -n 51 sig --wider &gt; qq.tsv
@@ -386,11 +399,11 @@ cinderplot 'qq.tsv + aes(R, G) + geom_point(size=1.2)
       <div class="shot" tabindex="0">
         <img src="figures/qc_intens_beta.png" alt="Total intensity versus beta, as a binned density">
         <button class="zoom" type="button" data-full="figures/qc_intens_beta.png" title="expand">⤢</button>
-        <div class="code"><pre><code>sesame <span class="sub">preprocess</span> --prep C --output intensity,beta --out qc/ $PFX
+        <div class="code"><pre><code>sesame <a class="sub" href="#ref-preprocess">preprocess</a> --prep C --output intensity,beta --out qc/ $PFX
 
 <span class="cm"># both .cg are positional to the same ordering, so attach-probe puts</span>
 <span class="cm"># them side by side -- no join. Then bin onto a 180x140 grid.</span>
-sesame <span class="sub">attach-probe</span> qc/intensity.cg qc/beta.cg \
+sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> qc/intensity.cg qc/beta.cg \
 | <b>tabl</b> rename M=2 U=3 beta=4 \
 | <b>tabl</b> mutate 'logint=log2(M+U)' \
 | <b>tabl</b> bin2d -x logint -y beta -nx 180 -ny 140 --xlim 5,15 --ylim 0,1 \
@@ -415,7 +428,7 @@ cinderplot 'qc/ib.tsv + aes(x, y, colour=density) + geom_point(size=0.7)
       (<code class="inl">$STORE</code> = <code class="inl">$YAME_DATA_HOME</code>).
       It still prints a deprecation notice for <code class="inl">--index</code>,
       which is the only flag it has — the rename has not reached it.</p>
-    <pre><code>sesame <span class="sub">dml</span> --betas out/beta.cg \
+    <pre><code>sesame <a class="sub" href="#ref-dml">dml</a> --betas out/beta.cg \
   --index $STORE/EPICv2/EPICv2.ordering.tsv.gz \
   --meta samples.tsv \
   --formula '~ group + age' &gt; dml.tsv</code></pre>
@@ -427,19 +440,19 @@ cinderplot 'qc/ib.tsv + aes(x, y, colour=density) + geom_point(size=0.7)
       (<code class="inl">rs</code>) probe intensities in an IDAT — every other bead
       is byte-identical, so betas are unchanged except the SNPs.</p>
     <pre><code><span class="cm"># zero SNP beads (a prefix does both channels)</span>
-sesame <span class="sub">deidentify</span> sample_prefix
+sesame <a class="sub" href="#ref-deidentify">deidentify</a> sample_prefix
 
 <span class="cm"># or reversibly scramble, then restore</span>
-sesame <span class="sub">deidentify</span> --randomize --seed 42 s.idat
-sesame <span class="sub">deidentify</span> -r --seed 42 s_noid.idat</code></pre>
+sesame <a class="sub" href="#ref-deidentify">deidentify</a> --randomize --seed 42 s.idat
+sesame <a class="sub" href="#ref-deidentify">deidentify</a> -r --seed 42 s_noid.idat</code></pre>
   </section>
 
   <section class="card">
     <h2>Copy number <span class="m">— cnv</span></h2>
     <p>OLS vs a normal panel → log2 → genome bins → CBS (DNAcopy port). Two output files.</p>
-    <pre><code>sesame <span class="sub">preprocess</span> --prep "" --raw-signal \
+    <pre><code>sesame <a class="sub" href="#ref-preprocess">preprocess</a> --prep "" --raw-signal \
   --output total_intensity --out t/ tumor
-sesame <span class="sub">cnv</span> --platform EPICv2 \
+sesame <a class="sub" href="#ref-cnv">cnv</a> --platform EPICv2 \
   --normals EPICv2.cnvnormals.cg \
   t/total_intensity.cg segments.tsv bins.tsv
 <span class="cm"># --probes: per-probe; --exclude chrY</span></code></pre>
@@ -449,7 +462,7 @@ sesame <span class="sub">cnv</span> --platform EPICv2 \
       or point the flag at your own.</p>
     <figure>
       <div class="shot" tabindex="0">
-        <img src="figures/cnv_k562.png" alt="K562 copy-number profile from sesame <span class="sub">cnv</span>">
+        <img src="figures/cnv_k562.png" alt="K562 copy-number profile from sesame <a class="sub" href="#ref-cnv">cnv</a>">
         <button class="zoom" type="button" data-full="figures/cnv_k562.png" title="expand">⤢</button>
         <div class="code"><pre><code><span class="cm"># plot the two files with cinderplot</span>
 cinderplot 'out/bins.tsv
@@ -467,7 +480,7 @@ cinderplot 'out/bins.tsv
   <section class="card">
     <h2>Genotype SNPs → VCF <span class="m">— vcf</span></h2>
     <p>SNP (<code class="inl">rs</code>) probes → VCF (<code class="inl">formatVCF</code>); GT + fractions exact vs R.</p>
-    <pre><code>sesame <span class="sub">vcf</span> tumor --platform EPICv2 &gt; geno.vcf
+    <pre><code>sesame <a class="sub" href="#ref-vcf">vcf</a> tumor --platform EPICv2 &gt; geno.vcf
 <span class="cm"># the SNP table comes from the store. --snp</span>
 <span class="cm"># overrides it, and is a path -- a bare</span>
 <span class="cm"># filename is not looked up in the store.</span>
@@ -482,7 +495,7 @@ cinderplot 'out/bins.tsv
       <div class="shot" tabindex="0">
         <img src="figures/region_dnmt3a.png" alt="DNMT3A methylation on a probe-anchored heatmap">
         <button class="zoom" type="button" data-full="figures/region_dnmt3a.png" title="expand">⤢</button>
-        <div class="code"><pre><code>sesame <span class="sub">region</span> <span class="cm">--gene DNMT3A</span> --pad 2000 \
+        <div class="code"><pre><code>sesame <a class="sub" href="#ref-region">region</a> <span class="cm">--gene DNMT3A</span> --pad 2000 \
   --betas cohort.beta.cg --platform EPICv2 \
 | cinderplot 'region()
   + cytoband("hg38/cytoband.tsv.gz", height=.5)
@@ -495,7 +508,7 @@ cinderplot 'out/bins.tsv
       <div class="shot" tabindex="0">
         <img src="figures/region_hoxa.png" alt="HOXA cluster methylation on a probe-anchored heatmap">
         <button class="zoom" type="button" data-full="figures/region_hoxa.png" title="expand">⤢</button>
-        <div class="code"><pre><code>sesame <span class="sub">region</span> <span class="cm">chr7:27,090,000-27,210,000</span> \
+        <div class="code"><pre><code>sesame <a class="sub" href="#ref-region">region</a> <span class="cm">chr7:27,090,000-27,210,000</span> \
   --betas cohort.beta.cg --platform EPICv2 \
 | cinderplot 'region()+genes()+matrix(-)' hoxa.png</code></pre></div>
       </div>
@@ -548,21 +561,21 @@ make truth RSCRIPT=Rscript-4.6.0</code></pre>
     <p>Post-process a <code class="inl">beta.cg</code> → <code class="inl">beta.cg</code>,
       positional to the platform ordering.</p>
     <pre><code><span class="cm"># lift betas across platforms (mLiftOver)</span>
-sesame <span class="sub">mliftover</span> --to EPIC --platform EPICv2 \
+sesame <a class="sub" href="#ref-mliftover">mliftover</a> --to EPIC --platform EPICv2 \
   beta.cg beta.EPIC.cg
 
 <span class="cm"># into a genome's CpG universe, as M/U pseudo-counts --</span>
 <span class="cm"># what a whole-genome model (methscope classify) reads</span>
-sesame <span class="sub">mliftover</span> --to hg38 --platform MSA \
+sesame <a class="sub" href="#ref-mliftover">mliftover</a> --to hg38 --platform MSA \
   --simulated-depth 100 beta.cg beta.hg38.cg
 
 <span class="cm"># a whole-genome model's mask down to the array</span>
-sesame <span class="sub">mliftover</span> --to MSA --platform hg38 \
+sesame <a class="sub" href="#ref-mliftover">mliftover</a> --to MSA --platform hg38 \
   model.mrmp model.MSA.mrmp
 
 <span class="cm"># fill NA betas (mean / genomic neighbours)</span>
-sesame <span class="sub">impute</span> --method mean beta.cg out.cg
-sesame <span class="sub">impute</span> --method neighbors \
+sesame <a class="sub" href="#ref-impute">impute</a> --method mean beta.cg out.cg
+sesame <a class="sub" href="#ref-impute">impute</a> --method neighbors \
   --platform EPICv2 beta.cg out.cg</code></pre>
     <p style="margin-top:11px"><b>mliftover</b> is one index-to-index map applied one
       way: array→array joins on probe-ID prefix (EPICv2↔EPIC↔HM450); array↔genome
@@ -626,16 +639,16 @@ ctl_10609447_NEGATIVE  NA  10609447  2</code></pre>
       or pre-release array needs no special flag. Every companion asset has its own
       override, inferred only when the platform is a name you published.</p>
     <pre><code><span class="cm"># named platform: ordering, mask, coords all inferred</span>
-sesame <span class="sub">preprocess</span> --platform EPICv2 --out out/ idats/
+sesame <a class="sub" href="#ref-preprocess">preprocess</a> --platform EPICv2 --out out/ idats/
 
 <span class="cm"># custom array: the ordering IS the platform</span>
-sesame <span class="sub">preprocess</span> --platform MyArray.ordering.csv \
+sesame <a class="sub" href="#ref-preprocess">preprocess</a> --platform MyArray.ordering.csv \
   --mask MyArray.mask.cm --prep QCDPB --out out/ idats/
 
 <span class="cm"># no mask: prep C or "", and betas only -- the</span>
 <span class="cm"># default --output carries pval and qc, which</span>
 <span class="cm"># need a mask whatever the prep</span>
-sesame <span class="sub">preprocess</span> --platform MyArray.ordering.csv \
+sesame <a class="sub" href="#ref-preprocess">preprocess</a> --platform MyArray.ordering.csv \
   --prep C --output beta --out out/ idats/</code></pre>
     <p style="margin-top:11px">Overrides: <code class="inl">--mask</code>
       <code class="inl">--coords</code> <code class="inl">--snp</code>
@@ -671,6 +684,324 @@ yame index -s names.txt MyArray.mask.cm  <span class="cm"># name it</span></code
 </div>
 
 </div><!-- /custom-array -->
+
+<div class="panel hidden" id="panel-reference" role="tabpanel" aria-labelledby="tab-reference">
+<div class="grid">
+
+<section class="card">
+  <h2>Reference <span class="m">— every subcommand's <code class="inl">-h</code>, as this build prints it</span></h2>
+  <p>Generated from the binary at build time, so nothing here can drift from what
+    <code class="inl">sesame &lt;command&gt; -h</code> says. Each entry is folded — click to open.
+    In every example on the other tabs the highlighted subcommand links to its entry here and
+    opens it. Grouped as the <code class="inl">sesame help</code> banner groups them.</p>
+</section>
+
+<!-- help:begin (generated by docs/build_help.py from `sesame <sub> -h`) -->
+<section class="card">
+  <h2>Preprocessing</h2>
+  <details class="ref" id="ref-preprocess">
+    <summary><code class="inl">sesame preprocess</code> <span class="m">— IDATs -&gt; betas / signal / detection p-value / QC (QCDPB)</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame preprocess [options] &lt;prefix|dir&gt; [&lt;prefix|dir&gt; ...]
+
+  Preprocess Infinium IDATs to methylation levels. Each argument is an
+  IDAT prefix (&lt;prefix&gt;_Grn.idat / _Red.idat, .gz ok) OR a directory,
+  searched recursively for pairs (found prefixes are sorted). Applies
+  --prep to every sample and writes one indexed YAME .cg per requested
+  output, over the whole cohort. A failed sample becomes an NA column
+  and the exit status is 1.
+
+Options:
+  --output LIST     comma list (default beta,intensity,pval,qc) from
+                    beta, intensity, total_intensity, pval, qc
+  --prep STEPS      prep code (default QCDPB): Q qualityMask,
+                    C inferChannel, D dyeBias(NL), E dyeBias(linear),
+                    P pOOBAH, B noob. Empty string = raw betas.
+  --raw-signal      take intensity/total from the raw signal, not the prep
+  --detection M     pval source: poobah (default) or pneg (negative-
+                    control ECDF). Masking always uses pOOBAH.
+  --collapse        average replicate probes to their cg-prefix in the
+                    beta output; axis -&gt; beta.cg.probes
+  --platform P      EPIC | EPICv2 | HM450 | MSA (else from the bead
+                    count), or the path to an ordering file, which is
+                    how a custom array is named.
+  --mask FILE       quality/background mask .cm. Inferred for a named
+                    platform; required for a custom array using Q/P/B.
+  --min-beads N     mask probes with &lt; N beads (default 0)
+  --out DIR         output directory (default: current directory)
+  --tmp DIR         scratch for the sample-major matrix (default $TMPDIR)
+  --threads N, -t   worker threads (default: number of CPUs)
+
+Outputs (under --out):
+  beta.cg  fmt4 betas     intensity.cg  fmt3 M/U
+  pval.cg  fmt4 det. p    total_intensity.cg  fmt4
+  qc.tsv   per-sample QC
+
+Notes:
+  Without --index the platform comes from the bead count and the
+  ordering from the shared store ($YAME_DATA_HOME), then ./.</code></pre>
+  </details>
+</section>
+<section class="card">
+  <h2>Analysis</h2>
+  <details class="ref" id="ref-dml">
+    <summary><code class="inl">sesame dml</code> <span class="m">— differential methylation: per-probe linear models</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame dml --betas &lt;beta.cg|matrix.tsv&gt; [options]
+  (--formula '~a+b' --meta &lt;s.tsv&gt; | --design &lt;X.tsv&gt;)
+
+  Per-probe differential methylation: OLS of each probe's betas on the
+  design, with per-coefficient t-tests, a holdout F-test per
+  categorical variable, effect sizes and BH-adjusted p-values. TSV on
+  stdout, one row per probe.
+
+Options:
+  --betas FILE      a preprocess beta.cg (needs --index for Probe_IDs)
+                    or a Probe_ID x sample matrix TSV
+  --formula '~a+b'  model over --meta columns (categoricals dummied)
+  --meta FILE       sample table; first column matches sample names
+  --design FILE     numeric design matrix (for interactions), in
+                    place of --formula/--meta
+  --threads N, -t   worker threads (default: number of CPUs)</code></pre>
+  </details>
+  <details class="ref" id="ref-cnv">
+    <summary><code class="inl">sesame cnv</code> <span class="m">— copy number: log2 ratio vs a normal panel + CBS</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame cnv [options] &lt;target.cg&gt; &lt;segments.tsv&gt; &lt;bins.tsv&gt;
+  sesame cnv --probes [options] &lt;target.cg&gt; &lt;segments.tsv&gt; &lt;probes.tsv&gt;
+
+  Copy number: regress the target's per-probe total intensity on a
+  panel of normals (OLS), take log2(target/fitted) per probe, bin
+  along the genome (median per bin), and segment by circular binary
+  segmentation. The target may hold several samples -- one profile
+  each. Writes the CBS &lt;segments.tsv&gt; plus a detail file that is
+  per-bin by default, or per-probe with --probes; cinderplot reads the
+  two as separate layers (segment step + points).
+
+Arguments (all required):
+  &lt;target.cg&gt;       total-intensity .cg, from `preprocess --raw-signal
+                    --output total_intensity`; may hold several samples
+  &lt;segments.tsv&gt;    output: sample chrom start end nbin seg.mean
+  &lt;bins.tsv&gt;        output: sample chrom start end nprobes log2ratio
+                    (--probes: sample Probe_ID chrom pos log2ratio)
+
+Options:
+  --probes          write per-probe rows to the detail file, not per-bin
+  --exclude LIST    comma list of chromosomes to drop from both outputs
+                    (e.g. chrY for a female sample; unreliable on arrays)
+  --normals FILE    normal panel .cg -- NOT shipped with the annotation;
+                    build one with `make cnv-normals` or supply your own
+  --platform P      EPIC | EPICv2 | HM450 | MSA; supplies the
+                    defaults. A path to an ordering file also works,
+                    for a custom array.
+  --index FILE      ordering .tsv.gz (overrides --platform)
+  --coords FILE     probe coordinate .tsv.gz (default: the store's)
+  --genome BUILD    genome build (default hg38)
+  --tilewidth BP    genome bin width (default 50000)
+  --min-probes N    drop bins with &lt; N probes (default 20)
+
+Notes:
+  coords/genome default to the store for --platform; the normal panel
+  does not, since it is not published with the annotation.</code></pre>
+  </details>
+  <details class="ref" id="ref-vcf">
+    <summary><code class="inl">sesame vcf</code> <span class="m">— genotype the SNP probes into a VCF (formatVCF)</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame vcf &lt;prefix&gt; [options]
+
+  Genotype the SNP probes into a VCF (sesame formatVCF). Runs on the
+  raw signal -- channel inference would erase the Type-I genotype.
+  &lt;prefix&gt; is an IDAT pair. Sites-only VCF on stdout.
+
+Options:
+  --platform P      EPIC | EPICv2 | HM450 | MSA (else from the bead
+                    count), or the path to an ordering file, which is
+                    how a custom array is named.
+  --index FILE      ordering .tsv.gz (overrides --platform)
+  --snp FILE        SNP table (default: the store's
+                    &lt;P&gt;.&lt;genome&gt;.snp.tsv.gz)
+  --genome BUILD    genome build (default hg38)
+  --variants        keep only rs and channel-switching probes, dropping
+                    the non-switching Infinium-I bulk (unlikely to vary)
+  --min-beads N     mask probes with &lt; N beads (default 0)
+  --out FILE, -o    write here instead of stdout</code></pre>
+  </details>
+  <details class="ref" id="ref-region">
+    <summary><code class="inl">sesame region</code> <span class="m">— a region's betas as long-form TSV, for plotting</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame region &lt;chr:beg-end&gt; --betas &lt;beta.cg&gt; [options]
+  sesame region --gene &lt;NAME&gt; --betas &lt;beta.cg&gt; [options]
+
+  Extract a region's betas from a multi-sample beta.cg as long-form
+  TSV: chrom beg end Probe_ID beta sample_name -- one row per (probe
+  in region) x sample, the plot-ready feed for a locus view. Give an
+  explicit chr:beg-end (commas ok) or a gene symbol via --gene, whose
+  span is looked up in the GENCODE gene models.
+
+Options:
+  --betas FILE      multi-sample beta.cg (required)
+  --gene NAME       resolve the region from a gene symbol (e.g. ADA)
+                    rather than a chr:beg-end
+  --gene-models F   GENCODE genes.bed.gz for --gene (default: store)
+  --pad BP          extend the region by BP on each side (default 0)
+  --platform P      EPIC | EPICv2 | HM450 | MSA, or the path to an
+                    ordering file. Supplies Probe_IDs and coords.
+  --index FILE      ordering .tsv.gz (overrides --platform)
+  --coords FILE     probe coordinate .tsv.gz (default: the store's)
+  --genome BUILD    genome build (default hg38)
+  --out FILE, -o    write here instead of stdout</code></pre>
+  </details>
+  <details class="ref" id="ref-mliftover">
+    <summary><code class="inl">sesame mliftover</code> <span class="m">— lift a .cg/.cm across arrays, or to/from a genome (hg38)</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame mliftover --to &lt;platform|genome&gt; [options] &lt;in.cx&gt; &lt;out.cx&gt;
+
+  Lift a .cg between row spaces (mLiftOver). Array to array joins on
+  probe-ID prefix: EPICv2/MSA carry a _suffix that EPIC/HM450/HM27
+  lack, stripped on the modern side when crossing families; each
+  target probe takes the first prefix-matched source beta (NA if
+  none). Array to GENOME (--to hg38) joins on coordinate, into the
+  genome's CpG universe (one row per CpG): replicate probes on one
+  CpG are averaged, rs/ch/unmapped probes are dropped and counted.
+  Genome to array (--platform hg38 --to MSA) takes any genome-indexed
+  .cg or .cm mask down to one row per probe; that direction is
+  lossy (CpGs with no probe are gone). Output is always positional
+  to the TARGET ordering.
+
+Options:
+  --to P            target: EPIC | EPICv2 | HM450 | MSA, or a genome
+                    such as hg38 whose cpg_nocontig.cr is in the store (required)
+  --platform P      source platform or genome, setting the direction
+                    (inferred from --index's filename if omitted)
+  --simulated-depth N write betas as format 3 with M+U=N on every covered
+                    row and 0,0 elsewhere -- what a whole-genome model
+                    (methscope classify) reads. Default: keep the input format.
+  --coords FILE     the array side's &lt;plat&gt;.&lt;genome&gt;.coord.tsv.gz
+                    (default: the store's)
+  --threads N, -t   worker threads sharing the one map in-process
+                    (default: number of CPUs); output is identical at any N
+  --index FILE      source ordering .tsv.gz (default: the store's)
+  --index-to FILE   target ordering .tsv.gz (default: the store's)
+
+Notes:
+  The empirical liftOver quality mappings and impute=TRUE are not
+  ported.</code></pre>
+  </details>
+  <details class="ref" id="ref-impute">
+    <summary><code class="inl">sesame impute</code> <span class="m">— fill missing betas (matrix mean or genomic neighbours)</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame impute --method &lt;mean|neighbors&gt; [options] &lt;in.cg&gt; &lt;out.cg&gt;
+
+  Fill missing (NA) beta values in a beta.cg (imputeBetas*). Output is
+  positional to the same ordering.
+
+--method mean:
+  imputeBetasMatrixByMean -- replace each NA with a mean.
+  --axis probe      mean of the probe across samples (default; R axis=1)
+  --axis sample     mean of the sample across probes (R axis=2)
+
+--method neighbors:
+  imputeBetasByGenomicNeighbors -- replace each missing probe with the
+  mean of its nearest non-missing genomic neighbours.
+  --platform P      EPIC | EPICv2 | HM450 | MSA (for the coord table)
+  --coords FILE     probe coordinate .tsv.gz (default: the store's).
+                    Matches R for mapQ&gt;=1 probes; differs only on
+                    mapQ=0 (multi-mapping) ones.
+  --genome BUILD    genome build (default hg38)
+  --max-neighbors N up to N nearest neighbours (default 3)
+  --max-dist BP     search window in bp (default 10000)</code></pre>
+  </details>
+</section>
+<section class="card">
+  <h2>Inspect / convert</h2>
+  <details class="ref" id="ref-attach-probe">
+    <summary><code class="inl">sesame attach-probe</code> <span class="m">— prepend Probe_IDs to a positional .cg / .tsv</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame attach-probe [options] &lt;file&gt;
+
+  Prepend the ordering's Probe_ID to a positional file's rows, as TSV
+  on stdout. &lt;file&gt; is a YAME .cg/.cm/.cx (fmt0 mask, fmt3 M/U or
+  --beta, fmt4 float) or a text .tsv[.gz], e.g. a .hg38.coord.tsv.gz.
+  The row count must match the ordering -- same platform and tag that
+  made the file.
+
+Options:
+  --platform P      EPIC | EPICv2 | HM450 | MSA. Omit it and the
+                    ordering comes from the filename, else from the
+                    file's row count -- each ordering has a distinct
+                    length, so a positional .cg identifies itself.
+  --index FILE      ordering .tsv.gz (overrides --platform)
+  --with LIST       also emit these ordering columns after the ID:
+                    M, U, col, mask (or all). The ordering is already
+                    open -- this saves joining it back on.
+  --all, -a         emit every sample column (default: first only)
+  --beta            read fmt3 M/U as beta
+  --no-header       omit the header row</code></pre>
+  </details>
+  <details class="ref" id="ref-idat-dump">
+    <summary><code class="inl">sesame idat-dump</code> <span class="m">— dump raw IDAT records, or a summary header</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame idat-dump [options] &lt;file.idat|file.idat.gz&gt;
+
+  Print IDAT contents. Default prints a summary header.
+
+Options:
+  --tsv             emit addr&lt;TAB&gt;mean&lt;TAB&gt;sd&lt;TAB&gt;nbeads
+  --head N          limit to the first N records</code></pre>
+  </details>
+  <details class="ref" id="ref-deidentify">
+    <summary><code class="inl">sesame deidentify</code> <span class="m">— remove the genetic fingerprint (SNP probes)</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame deidentify [options] &lt;prefix|idat&gt; [&lt;out.idat&gt;]
+
+  Strip the genetic fingerprint from an IDAT: the SNP (rs) probes'
+  bead Mean intensities are zeroed (default), or reversibly scrambled
+  with --randomize --seed. Everything else is copied byte-for-byte, so
+  the file reads identically apart from the SNP beads (ports sesame's
+  deIdentify). A &lt;prefix&gt; processes both Grn and Red; a single
+  .idat[.gz] just that file. Output defaults to &lt;name&gt;_noid_*.idat,
+  or _reid_ with -r.
+
+Options:
+  --randomize       scramble the SNP means instead of zeroing
+                    (reversible)
+  -r, --reidentify  reverse a --randomize; needs the same --seed
+  --seed N          seed for --randomize / -r
+  --platform P      EPIC | EPICv2 | HM450 | MSA (else from the bead
+                    count), or the path to an ordering file, which is
+                    how a custom array is named.
+  --index FILE      ordering .tsv.gz (overrides --platform)
+  --out FILE        output path (single input only)
+
+Notes:
+  --randomize uses this tool's own PRNG, so a scrambled file
+  round-trips with `deidentify -r --seed &lt;same N&gt;`, not with R.
+  Zeroing is R-equivalent and irreversible.</code></pre>
+  </details>
+</section>
+<section class="card">
+  <h2>Other</h2>
+  <details class="ref" id="ref-version">
+    <summary><code class="inl">sesame version</code> <span class="m">— version, the yame it links, the store</span></summary>
+    <pre class="help"><code>sesame 2.0.0
+    built against  YAME v1.54
+    store          /home/user/.local/share/yame   ($YAME_DATA_HOME unset; yame fetch fills it)</code></pre>
+  </details>
+</section>
+<!-- help:end -->
+
+</div>
+</div><!-- /panel-reference -->
 
 <section class="full">
   <h2>Citation <span class="m">— the SeSAMe papers</span></h2>
@@ -989,6 +1320,7 @@ yame index -s names.txt MyArray.mask.cm  <span class="cm"># name it</span></code
       var el = location.hash.length > 1 &&
                document.getElementById(location.hash.slice(1));
       if (!el) return;
+      if (el.tagName === "DETAILS") el.open = true;   /* a #ref-<sub> entry */
       var p = el.closest('[role="tabpanel"]');
       while (p) {
         var t = document.querySelector('[aria-controls="' + p.id + '"]');

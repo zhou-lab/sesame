@@ -54,7 +54,7 @@ OBJ     := $(SRC:.c=.o)
 CLI_OBJ := $(CLI_SRC:.c=.o)
 BIN     := sesame
 
-.PHONY: all asan test test-docs test-docs-check test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-attach test-cnv test-cbs test-vcf test-deidentify index cnv-normals registry yame-lib install fuzz fuzz-replay clean
+.PHONY: all asan docs test test-docs test-docs-check test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-attach test-cnv test-cbs test-vcf test-deidentify index cnv-normals registry yame-lib install fuzz fuzz-replay clean
 
 all: $(BIN)
 
@@ -139,12 +139,20 @@ test-idat: $(BIN)
 # this catches.
 test-docs-check: $(BIN)
 	@python3 tests/docs_gate.py --consistency
+	@python3 docs/build_help.py --check
 
 # The documented-workflow gate: every docs/examples/*.sh run against this
 # checkout's binary, in a sandbox, as a reader would. It needs a populated
 # $$YAME_DATA_HOME and test IDATs at $$SESAME_TEST_IDATS, so it is NOT part of
 # `make test` and never runs in CI or a conda build. On the HPC run it under
 # sbatch (release SOP step 5). Skips cleanly when either input is absent.
+# docs/index.html is prose around one generated part: the Reference tab, every
+# subcommand's -h from THIS binary (docs/build_help.py). `make docs` writes it,
+# `make test-docs-check` refuses a page behind the binary -- so it is a release
+# step, run before the tag (the SOP says so).
+docs: $(BIN)
+	@python3 docs/build_help.py
+
 test-docs: $(BIN)
 	@python3 tests/docs_gate.py
 
