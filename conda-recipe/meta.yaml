@@ -62,7 +62,7 @@ about:
   license: LicenseRef-CHOP-Academic-BSD-2-Clause
   license_family: OTHER
   license_file: LICENSE
-  summary: Sesame2 - the C implementation of sesame's Infinium methylation preprocessing (IDAT -> betas), with QC, DML, and CNV.
+  summary: SeSAMe2 - the C implementation of sesame's Infinium methylation preprocessing (IDAT -> betas), with QC, DML, and CNV.
   description: |
     sesame is a dependency-light C program that reproduces the sesame /
     openSesame Infinium DNA-methylation workflow without R or Bioconductor:

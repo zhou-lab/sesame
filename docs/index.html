@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sesame2 — Infinium methylation in one C binary</title>
-<meta name="description" content="Sesame2: SEnsible Step-wise Analysis of DNA MEthylation, second implementation — Infinium analysis as a single C binary. No R.">
+<title>SeSAMe2 — Infinium methylation in one C binary</title>
+<meta name="description" content="SeSAMe2: SEnsible Step-wise Analysis of DNA MEthylation, second implementation — Infinium analysis as a single C binary. No R.">
 <style>
   :root{
     --bg:#fbfcfe;--fg:#1b2030;--muted:#5b6472;--line:#e5e8ee;--soft:#f1f3f8;--card:#ffffff;
@@ -195,9 +195,9 @@
   <div class="titlerow">
     <h1><b>SE</b>nsible <b>S</b>tep-wise <b>A</b>nalysis of DNA <b>ME</b>thylation</h1>
     <a class="badge badge-ver" id="ver" href="https://github.com/zwdzwd/sesame-cli/tags">latest</a>
-    <span class="badge">Sesame2 · cli</span>
+    <span class="badge">SeSAMe2 · cli</span>
     <button id="agent-btn" type="button"
-            data-cmd="Use sesame (Sesame2, the C command line) for Infinium DNA methylation analysis: IDAT to betas, QC, DML, CNV, SNP genotyping. Read https://zwdzwd.github.io/sesame-cli/llms.txt first for installation, the shared asset store filled by yame fetch, commands, the prep codes, custom-array orderings, traps, and development guidance."
+            data-cmd="Use sesame (SeSAMe2, the C command line) for Infinium DNA methylation analysis: IDAT to betas, QC, DML, CNV, SNP genotyping. Read https://zwdzwd.github.io/sesame-cli/llms.txt first for installation, the shared asset store filled by yame fetch, commands, the prep codes, custom-array orderings, traps, and development guidance."
             title="Copy a prompt for your coding agent"
             aria-label="Copy a prompt for your coding agent"><span class="ico"></span>agent prompt</button>
     <span class="install">
@@ -219,7 +219,7 @@
   </div>
   <p class="expand">Infinium analysis made simpler — the same betas as the R
     package, ~20&times; faster.</p>
-  <p class="parallel"><b>Sesame2 (2.x, this command line) and sesame (1.x, the
+  <p class="parallel"><b>SeSAMe2 (2.x, this command line) and sesame (1.x, the
     R/Bioconductor package) are parallel, not sequential.</b> Neither is an
     upgrade of the other — one is an R package you <code>library()</code>, the
     other a binary you run in a shell. They are one project and one method,
@@ -628,8 +628,8 @@ sesame <span class="sub">preprocess</span> --platform MyArray.ordering.csv \
       projection: <code class="inl">IlmnID</code>&rarr;<code class="inl">Probe_ID</code>,
       <code class="inl">AddressB_ID</code>&rarr;<code class="inl">M</code>,
       <code class="inl">AddressA_ID</code>&rarr;<code class="inl">U</code>, design +
-      colour channel&rarr;<code class="inl">col</code>. Full spec in the
-      <a href="https://github.com/zwdzwd/sesame-cli#custom-arrays--the-ordering-table">README</a>.</p>
+      colour channel&rarr;<code class="inl">col</code>. The four columns are
+      specified above.</p>
   </section>
 
   <section class="card">
@@ -659,7 +659,7 @@ yame index -s names.txt MyArray.mask.cm  <span class="cm"># name it</span></code
 
 <section class="full">
   <h2>Citation <span class="m">— the SeSAMe papers</span></h2>
-  <p>Sesame2 is a C reimplementation of the SeSAMe method family. Please cite the
+  <p>SeSAMe2 is a C reimplementation of the SeSAMe method family. Please cite the
     work behind the parts you use:</p>
   <ul class="cite">
     <li><span class="what">Infinium annotation &amp; masking</span> — Zhou, Laird &amp; Shen.
