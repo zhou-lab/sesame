@@ -205,10 +205,10 @@
 <header>
   <div class="titlerow">
     <h1><b>SE</b>nsible <b>S</b>tep-wise <b>A</b>nalysis of DNA <b>ME</b>thylation</h1>
-    <a class="badge badge-ver" id="ver" href="https://github.com/zwdzwd/sesame-cli/tags">latest</a>
+    <a class="badge badge-ver" id="ver" href="https://github.com/zhou-lab/sesame/tags">latest</a>
     <span class="badge">SeSAMe2 · cli</span>
     <button id="agent-btn" type="button"
-            data-cmd="Use sesame (SeSAMe2, the C command line) for Infinium DNA methylation analysis: IDAT to betas, QC, DML, CNV, SNP genotyping. Read https://zwdzwd.github.io/sesame-cli/llms.txt first for installation, the shared asset store filled by yame fetch, commands, the prep codes, custom-array orderings, traps, and development guidance."
+            data-cmd="Use sesame (SeSAMe2, the C command line) for Infinium DNA methylation analysis: IDAT to betas, QC, DML, CNV, SNP genotyping. Read https://zhou-lab.github.io/sesame/llms.txt first for installation, the shared asset store filled by yame fetch, commands, the prep codes, custom-array orderings, traps, and development guidance."
             title="Copy a prompt for your coding agent"
             aria-label="Copy a prompt for your coding agent"><span class="ico"></span>agent prompt</button>
     <span class="install">
@@ -239,7 +239,7 @@
     <code>conda install -c zhou-lab sesame</code> for this one. The R package
     stays on the 1.x series.</p>
   <p class="links">
-    <a href="https://github.com/zwdzwd/sesame-cli">GitHub</a><span>·</span>
+    <a href="https://github.com/zhou-lab/sesame">GitHub</a><span>·</span>
     <a href="https://bioconductor.org/packages/sesame">R / Bioconductor</a><span>·</span>
     <a href="https://zhou-lab.github.io/YAME/">YAME</a><span>·</span>
     <a href="https://zwdzwd.github.io/InfiniumAnnotation">InfiniumAnnotation</a><span>·</span>
@@ -269,8 +269,8 @@ conda install -c zhou-lab -c conda-forge \
 
 <span class="cm"># or build sesame from source</span>
 git clone --recurse-submodules \
-  https://github.com/zwdzwd/sesame-cli
-cd sesame-cli &amp;&amp; make
+  https://github.com/zhou-lab/sesame
+cd sesame &amp;&amp; make
 
 <span class="cm"># one-time: annotation into the shared store</span>
 <span class="cm"># -y is required off a terminal; it refuses without</span>
@@ -520,7 +520,7 @@ cinderplot 'out/bins.tsv
     <h2>Where we differ from R <span class="m">— DIVERGENCES.md</span></h2>
     <p>R is the oracle, and nearly everything matches it to the ULP. The
       exceptions are listed — not rounded away — in
-      <a href="https://github.com/zwdzwd/sesame-cli/blob/main/DIVERGENCES.md">DIVERGENCES.md</a>,
+      <a href="https://github.com/zhou-lab/sesame/blob/main/DIVERGENCES.md">DIVERGENCES.md</a>,
       each with what differs, why, and the measurement that settled it.</p>
     <p>Most of them are not arithmetic at all: the two programs read
       <b>different annotation</b>. sesame reads the store
@@ -1029,10 +1029,10 @@ Notes:
 
 <footer>
   Betas are bit-identical to R where it counts. Every step's tolerance is in
-  <a href="https://github.com/zwdzwd/sesame-cli/blob/main/NUMERICS.md">NUMERICS.md</a>;
+  <a href="https://github.com/zhou-lab/sesame/blob/main/NUMERICS.md">NUMERICS.md</a>;
   every place the two programs give <i>different answers</i> — and why — is in
-  <a href="https://github.com/zwdzwd/sesame-cli/blob/main/DIVERGENCES.md">DIVERGENCES.md</a>.
-  BSD-2-Clause for academic and non-profit research; commercial by inquiry. · <a href="https://github.com/zwdzwd/sesame-cli">github.com/zwdzwd/sesame-cli</a>
+  <a href="https://github.com/zhou-lab/sesame/blob/main/DIVERGENCES.md">DIVERGENCES.md</a>.
+  BSD-2-Clause for academic and non-profit research; commercial by inquiry. · <a href="https://github.com/zhou-lab/sesame">github.com/zhou-lab/sesame</a>
 </footer>
 
 </div>
@@ -1112,7 +1112,7 @@ Notes:
    * alphabetically v1.8 sorts above v1.31 -- and filtered to v<digit>, since
    * some of these repositories also tag things like "MSA.ordering.v1".
    * Offline or rate-limited it keeps its label and still links to the tags. */
-  fetch("https://api.github.com/repos/zwdzwd/sesame-cli/tags?per_page=100")
+  fetch("https://api.github.com/repos/zhou-lab/sesame/tags?per_page=100")
     .then(function (r) { return r.ok ? r.json() : []; })
     .then(function (tags) {
       var parts = function (v) { return v.replace(/^v/, "").split(".").map(Number); };
@@ -1129,7 +1129,7 @@ Notes:
       if (!newest) return;
       var el = document.getElementById("ver");
       el.textContent = newest;
-      el.href = "https://github.com/zwdzwd/sesame-cli/releases/tag/" + newest;
+      el.href = "https://github.com/zhou-lab/sesame/releases/tag/" + newest;
     })
     .catch(function () {});
 
@@ -1137,7 +1137,7 @@ Notes:
    * submodule rather than hardcoding it -- read the commit the submodule
    * points at, then src/yame_version.h from YAME at that commit. Tracks the
    * pin with no manual edit, and simply stays hidden if either call fails. */
-  fetch("https://api.github.com/repos/zwdzwd/sesame-cli/contents/YAME")
+  fetch("https://api.github.com/repos/zhou-lab/sesame/contents/YAME")
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (sub) {
       if (!sub || !sub.sha) return null;

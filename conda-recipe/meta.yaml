@@ -58,7 +58,7 @@ test:
     - sesame help 2>&1 | grep -q "yame fetch"
 
 about:
-  home: https://github.com/zwdzwd/sesame-cli
+  home: https://github.com/zhou-lab/sesame
   license: LicenseRef-CHOP-Academic-BSD-2-Clause
   license_family: OTHER
   license_file: LICENSE
@@ -75,7 +75,7 @@ about:
     tolerances (see NUMERICS.md). Platform annotations come from the shared
     store filled by `yame fetch`; sesame itself never touches the network.
     The only runtime dependencies are zlib and libcurl.
-  dev_url: https://github.com/zwdzwd/sesame-cli
+  dev_url: https://github.com/zhou-lab/sesame
 
 extra:
   recipe-maintainers:

@@ -1,7 +1,7 @@
 # SeSAMe2 (sesame-cli) — agent reference
-# Canonical: https://zwdzwd.github.io/sesame-cli/llms.txt
-# Human guide: https://zwdzwd.github.io/sesame-cli/
-# Source: https://github.com/zwdzwd/sesame-cli
+# Canonical: https://zhou-lab.github.io/sesame/llms.txt
+# Human guide: https://zhou-lab.github.io/sesame/
+# Source: https://github.com/zhou-lab/sesame
 # For exact flags, always run: sesame <command> -h
 
 ## What it is
@@ -33,7 +33,7 @@ wrangling), both in the same channel.
 Source build needs a C compiler, make, zlib, libcurl and the bundled YAME
 submodule:
 
-  git clone --recurse-submodules https://github.com/zwdzwd/sesame-cli
+  git clone --recurse-submodules https://github.com/zhou-lab/sesame
   cd sesame-cli && make
 
 Also put `yame` on PATH. sesame downloads nothing; `yame fetch` is how the
@@ -194,7 +194,7 @@ Mask: a `.cm` is a bitset, one bit per ordering row, 1 = drop.
 
 R is the oracle. `prep=""` betas and the IDAT reader are bit-identical; every
 intentional divergence is quantified one row per case in
-https://github.com/zwdzwd/sesame-cli/blob/main/NUMERICS.md — read it before
+https://github.com/zhou-lab/sesame/blob/main/NUMERICS.md — read it before
 changing a prep step.
 
 ## Development
