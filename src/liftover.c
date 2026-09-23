@@ -47,6 +47,8 @@
 #include <string.h>
 #include <math.h>
 #include <zlib.h>
+#include <pthread.h>
+#include <unistd.h>   /* sysconf: default thread count */
 #include "cfile.h"    /* open_cfile, read_cdata1, cdata_write1, BGZF */
 #include "cdata.h"    /* cdata_t, decompress, f3_get_mu/f3_set_mu, row_finder */
 #include "index.h"    /* loadSampleNamesFromIndex, cleanSampleNames2 */
@@ -358,160 +360,293 @@ static double lo_beta(const cdata_t *d, int64_t s)
     }
 }
 
+/* One record, start to finish: inflate the compressed block c (consumed),
+ * reduce it through the map, compress the result into *out. Pure -- no shared
+ * state but the read-only map -- which is what lets the records run in
+ * parallel with the map built once. */
+static int lo_apply_one(cdata_t c, const sesame_rowmap_t *m, int depth,
+                        const char *in_cx, cdata_t *out, sesame_err_t *err)
+{
+    cdata_t d, o;
+    int in3, in4, numeric, is_mask;
+    int64_t k;
+    int rc;
+    /* A mask block (format 0/1) is inflated the way mask.c does it --
+     * prepare_mask -> convertToFmt0, in place, c.n then the bit count --
+     * because decompress() hands back 0 rows for a compressed format-0
+     * record. Everything else inflates with decompress(). */
+    is_mask = c.fmt < '2';
+    if (is_mask) { prepare_mask(&c); d = c; }
+    else d = decompress(c);
+    if ((int64_t)d.n != m->nsrc) {
+        lo_free2(&c, &d, is_mask);
+        rc = sesame__fail(err, SESAME_ERR_FORMAT,
+            "%s has %llu rows but the source row space has %lld -- not indexed to it",
+            in_cx, (unsigned long long)d.n, (long long)m->nsrc);
+        return rc;
+    }
+    if (d.fmt == '7') {
+        lo_free2(&c, &d, is_mask);
+        rc = sesame__fail(err, SESAME_ERR_UNSUPPORTED,
+            "%s is a row-coordinate track (format 7), which is the map, not data", in_cx);
+        return rc;
+    }
+    in3 = d.fmt == '3'; in4 = d.fmt == '4'; numeric = in3 || in4;
+    if (depth > 0 && !numeric) {
+        lo_free2(&c, &d, is_mask);
+        rc = sesame__fail(err, SESAME_ERR_UNSUPPORTED,
+            "--simulated-depth needs betas (format 4) or M/U (format 3); %s is format %c",
+            in_cx, d.fmt);
+        return rc;
+    }
+
+    /* The output record, initialised to the format's own "absent" so a
+     * target in no pair reads as missing, never as a value. */
+    memset(&o, 0, sizeof o);
+    o.compressed = 0; o.n = (uint64_t)m->ntgt;
+    if (depth > 0 || in3) {                                /* M/U, 0,0 = missing */
+        o.fmt = '3'; o.unit = 8; o.s = (uint8_t *)calloc((size_t)m->ntgt, 8);
+    } else if (in4) {                                      /* betas, NA = -1.0 */
+        float *s = (float *)malloc((size_t)m->ntgt * sizeof(float));
+        o.fmt = '4'; o.unit = sizeof(float); o.s = (uint8_t *)s;
+        if (s) for (int64_t r = 0; r < m->ntgt; r++) s[r] = -1.0f;
+    } else if (d.fmt == '0') {                             /* 1 bit per row */
+        o.fmt = '0'; o.unit = d.unit; o.s = (uint8_t *)calloc(((size_t)m->ntgt + 7) >> 3, 1);
+    } else if (d.fmt == '6') {                             /* 2 bits per row */
+        o.fmt = '6'; o.unit = d.unit; o.s = (uint8_t *)calloc(((size_t)m->ntgt + 3) >> 2, 1);
+    } else if (d.fmt == '2') {                             /* state track */
+        /* Layout is [keys...][\0][rows...]: the key table rides across
+         * unchanged (as rowsub's slice does it) and the rows follow it.
+         * calloc leaves an unmapped row at code 0 -- the track's FIRST
+         * state, which for an MRMP is the null pattern (Pna). */
+        uint64_t keys_nb = fmt2_get_keys_nbytes(&d);
+        o.fmt = '2'; o.unit = d.unit;
+        o.s = (uint8_t *)calloc(1, (size_t)keys_nb + 1 + (size_t)m->ntgt * d.unit);
+        if (o.s) memcpy(o.s, d.s, (size_t)keys_nb + 1);
+    } else {                                               /* '1', '5': unit-wide */
+        o.fmt = d.fmt; o.unit = d.unit; o.s = (uint8_t *)calloc((size_t)m->ntgt, d.unit);
+    }
+    if (!o.s) { lo_free2(&c, &d, is_mask); return sesame__fail(err, SESAME_ERR_NOMEM, "oom"); }
+    /* where the rows start, for the unit-wide copy: after the key table
+     * on a state track, at the buffer start otherwise */
+    const uint8_t *ibase = d.fmt == '2' ? fmt2_get_data(&d) : d.s;
+    uint8_t *obase = d.fmt == '2' ? o.s + fmt2_get_keys_nbytes(&d) + 1 : o.s;
+
+    /* One pass over the pairs; each run of equal targets is one reduction. */
+    for (k = 0; k < m->npair; ) {
+        int64_t t = m->tgt[k], k2 = k;
+        if (numeric && (depth > 0 || in4)) {               /* mean of non-NA betas */
+            double sum = 0.0; int n = 0;
+            for (; k2 < m->npair && m->tgt[k2] == t; k2++) {
+                double v = lo_beta(&d, m->src[k2]);
+                if (!isnan(v)) { sum += v; n++; }
+            }
+            if (n) {
+                double v = sum / n;
+                if (depth > 0) {
+                    uint64_t M = (uint64_t)llround(v * depth);
+                    f3_set_mu(&o, (uint64_t)t, M, (uint64_t)depth - M);
+                } else ((float *)o.s)[t] = (float)v;
+            }
+        } else if (in3) {                                  /* real counts: pool */
+            uint64_t M = 0, U = 0;
+            for (; k2 < m->npair && m->tgt[k2] == t; k2++) {
+                uint64_t mu = f3_get_mu(&d, (uint64_t)m->src[k2]);
+                M += mu >> 32; U += mu & 0xffffffffULL;
+            }
+            f3_set_mu(&o, (uint64_t)t, M, U);
+        } else if (d.fmt == '0') {                         /* OR */
+            int bit = 0;
+            for (; k2 < m->npair && m->tgt[k2] == t; k2++) {
+                int64_t s = m->src[k2];
+                if (d.s[s >> 3] & (1u << (s & 7))) bit = 1;
+            }
+            if (bit) o.s[t >> 3] |= (uint8_t)(1u << (t & 7));
+        } else if (d.fmt == '6') {                         /* max code */
+            uint8_t v = 0;
+            for (; k2 < m->npair && m->tgt[k2] == t; k2++) {
+                int64_t s = m->src[k2];
+                uint8_t x = (d.s[s >> 2] >> ((s & 3) * 2)) & 3;
+                if (x > v) v = x;
+            }
+            o.s[t >> 2] |= (uint8_t)(v << ((t & 3) * 2));
+        } else {                                           /* first wins */
+            memcpy(obase + (size_t)o.unit * (size_t)t, ibase + (size_t)d.unit * (size_t)m->src[k], o.unit);
+            for (; k2 < m->npair && m->tgt[k2] == t; k2++) ;
+        }
+        k = k2;
+    }
+
+    cdata_compress(&o);                                    /* frees raw o.s */
+    *out = o;
+    lo_free2(&c, &d, is_mask);
+    return SESAME_OK;
+}
+
+/* The work-sharing context. Workers take the next record under the mutex and
+ * process it with nothing else shared; the first error stops the rest. */
+typedef struct {
+    const sesame_rowmap_t *m;
+    int depth;
+    const char *in_cx, *out_cx;
+    cdata_t *in;               /* compressed input blocks; consumed as processed */
+    int32_t nrec, next;
+    int failed;
+    sesame_err_t err;
+    pthread_mutex_t mu;
+} lo_ctx;
+
+/* Where record i is written by its worker: a complete BGZF stream of its own,
+ * produced by YAME's writer with the deflate done on the worker's thread. */
+static void lo_part_name(char *buf, size_t n, const char *out_cx, int32_t i)
+{
+    snprintf(buf, n, "%s.%d.part", out_cx, (int)i);
+}
+
+static void *lo_worker(void *arg)
+{
+    lo_ctx *x = (lo_ctx *)arg;
+    for (;;) {
+        int32_t i;
+        sesame_err_t e;
+        pthread_mutex_lock(&x->mu);
+        if (x->failed || x->next >= x->nrec) { pthread_mutex_unlock(&x->mu); return NULL; }
+        i = x->next++;
+        pthread_mutex_unlock(&x->mu);
+        cdata_t o;
+        char part[4096];
+        BGZF *tf;
+        int bad = lo_apply_one(x->in[i], x->m, x->depth, x->in_cx, &o, &e) != SESAME_OK;
+        x->in[i].s = NULL; x->in[i].n = 0;                   /* consumed either way */
+        if (!bad) {
+            lo_part_name(part, sizeof part, x->out_cx, i);
+            if (!(tf = bgzf_open2(part, "w"))) {
+                bad = sesame__fail(&e, SESAME_ERR_IO, "cannot write %s", part) != SESAME_OK;
+            } else {
+                cdata_write1(tf, &o);                        /* the deflate, here */
+                bgzf_close(tf);
+            }
+            free(o.s);
+        }
+        if (bad) {
+            pthread_mutex_lock(&x->mu);
+            if (!x->failed) { x->failed = 1; x->err = e; }
+            pthread_mutex_unlock(&x->mu);
+            return NULL;
+        }
+    }
+}
+
 int sesame_liftover_apply(const char *in_cx, const char *out_cx,
-                          const sesame_rowmap_t *m, int depth, sesame_err_t *err)
+                          const sesame_rowmap_t *m, int depth, int nthreads,
+                          sesame_err_t *err)
 {
     cfile_t cf;
     snames_t sn;
-    BGZF *fp = NULL;
     char inbuf[4096];
-    int64_t *offs = NULL, k;
+    lo_ctx x;
+    pthread_t *th = NULL;
+    FILE *of = NULL;
+    int64_t *offs = NULL, pos = 0;
+    uint8_t eof[28];
+    int have_eof = 0;
     char **names = NULL;
-    int32_t ns = 0, cap = 0, i, rc = SESAME_OK;
+    int32_t cap = 0, i, spawned = 0;
+    int T, rc = SESAME_OK;
 
     if (err) { err->code = SESAME_OK; err->msg[0] = '\0'; }
     if (!in_cx || !out_cx || !m) return sesame__fail(err, SESAME_ERR_IO, "null argument");
     if (depth < 0) return sesame__fail(err, SESAME_ERR_IO, "depth must be >= 0");
 
+    memset(&x, 0, sizeof x);
+    x.m = m; x.depth = depth; x.in_cx = in_cx; x.out_cx = out_cx;
+    pthread_mutex_init(&x.mu, NULL);
+
+    /* 1. read every compressed block up front (sequential, small: ~1 MB per
+     *    array record, ~0.6 MB per genome record) so the workers never touch
+     *    the input stream */
     snprintf(inbuf, sizeof inbuf, "%s", in_cx);
     cf = open_cfile(inbuf);
-    if (!cf.fh) return sesame__fail(err, SESAME_ERR_IO, "cannot open %s", in_cx);
+    if (!cf.fh) { pthread_mutex_destroy(&x.mu); return sesame__fail(err, SESAME_ERR_IO, "cannot open %s", in_cx); }
     sn = loadSampleNamesFromIndex(inbuf);
-    if (!(fp = bgzf_open2(out_cx, "w"))) {
+    for (;;) {
+        cdata_t c = read_cdata1(&cf);
+        if (c.n == 0) break;                                   /* EOF */
+        if (x.nrec >= cap) {
+            cap = cap ? cap * 2 : 8;
+            x.in = (cdata_t *)realloc(x.in, (size_t)cap * sizeof(cdata_t));
+        }
+        x.in[x.nrec++] = c;
+    }
+    bgzf_close(cf.fh);
+
+    /* 2. the records, across T workers sharing the one map */
+    if (nthreads <= 0) { long n = sysconf(_SC_NPROCESSORS_ONLN); nthreads = n > 0 ? (int)n : 1; }
+    T = nthreads < x.nrec ? nthreads : x.nrec;
+    if (T < 1) T = 1;
+    th = (pthread_t *)calloc((size_t)T, sizeof(pthread_t));
+    if (th) for (i = 0; i < T - 1; i++) if (pthread_create(&th[spawned], NULL, lo_worker, &x) == 0) spawned++;
+    lo_worker(&x);                                             /* this thread works too */
+    for (i = 0; i < spawned; i++) pthread_join(th[i], NULL);
+    if (x.failed) { if (err) *err = x.err; rc = x.err.code ? x.err.code : SESAME_ERR_IO; goto out; }
+
+    /* 3. stitch the parts in input order. Each part is a complete BGZF stream
+     * from YAME's writer; drop its trailing empty EOF block (gzip magic, BSIZE
+     * 27, ISIZE 0 -- recognised structurally, not by a constant) and append
+     * one at the end. Records are therefore block-aligned: a valid BGZF file,
+     * a record's .idx offset its block address with no in-block part, and the
+     * bytes identical at any thread count, since a record's bytes never depend
+     * on which thread produced them. */
+    offs  = (int64_t *)malloc((size_t)(x.nrec ? x.nrec : 1) * sizeof(int64_t));
+    names = (char **)calloc((size_t)(x.nrec ? x.nrec : 1), sizeof(char *));
+    if (!offs || !names) { rc = sesame__fail(err, SESAME_ERR_NOMEM, "oom"); goto out; }
+    if (!(of = fopen(out_cx, "wb"))) {
         rc = sesame__fail(err, SESAME_ERR_IO, "cannot open %s for writing", out_cx); goto out;
     }
-
-    for (;;) {
-        cdata_t c = read_cdata1(&cf), d, o;
-        int in3, in4, numeric, is_mask;
-        if (c.n == 0) break;                                   /* EOF */
-        /* A mask block (format 0/1) is inflated the way mask.c does it --
-         * prepare_mask -> convertToFmt0, in place, c.n then the bit count --
-         * because decompress() hands back 0 rows for a compressed format-0
-         * record. Everything else inflates with decompress(). */
-        is_mask = c.fmt < '2';
-        if (is_mask) { prepare_mask(&c); d = c; }
-        else d = decompress(c);
-        if ((int64_t)d.n != m->nsrc) {
-            lo_free2(&c, &d, is_mask);
-            rc = sesame__fail(err, SESAME_ERR_FORMAT,
-                "%s has %llu rows but the source row space has %lld -- not indexed to it",
-                in_cx, (unsigned long long)d.n, (long long)m->nsrc);
-            goto out;
+    for (i = 0; i < x.nrec; i++) {
+        char part[4096];
+        FILE *pf;
+        long sz, keep;
+        uint8_t *buf;
+        lo_part_name(part, sizeof part, out_cx, i);
+        if (!(pf = fopen(part, "rb"))) { rc = sesame__fail(err, SESAME_ERR_IO, "lost %s", part); goto out; }
+        fseek(pf, 0, SEEK_END); sz = ftell(pf); rewind(pf);
+        buf = (uint8_t *)malloc((size_t)(sz > 0 ? sz : 1));
+        if (!buf || (sz > 0 && fread(buf, 1, (size_t)sz, pf) != (size_t)sz)) {
+            fclose(pf); free(buf); rc = sesame__fail(err, SESAME_ERR_IO, "cannot read %s", part); goto out;
         }
-        if (d.fmt == '7') {
-            lo_free2(&c, &d, is_mask);
-            rc = sesame__fail(err, SESAME_ERR_UNSUPPORTED,
-                "%s is a row-coordinate track (format 7), which is the map, not data", in_cx);
-            goto out;
+        fclose(pf); unlink(part);
+        keep = sz;
+        if (sz >= 28) {
+            const uint8_t *t = buf + sz - 28;
+            int empty = t[0] == 0x1f && t[1] == 0x8b && t[2] == 8 && t[3] == 4
+                     && t[16] == 27 && t[17] == 0                      /* BSIZE-1 */
+                     && t[24] == 0 && t[25] == 0 && t[26] == 0 && t[27] == 0;  /* ISIZE */
+            if (empty) { keep = sz - 28; if (!have_eof) { memcpy(eof, t, 28); have_eof = 1; } }
         }
-        in3 = d.fmt == '3'; in4 = d.fmt == '4'; numeric = in3 || in4;
-        if (depth > 0 && !numeric) {
-            lo_free2(&c, &d, is_mask);
-            rc = sesame__fail(err, SESAME_ERR_UNSUPPORTED,
-                "--simulated-depth needs betas (format 4) or M/U (format 3); %s is format %c",
-                in_cx, d.fmt);
-            goto out;
+        offs[i] = pos << 16;
+        if (keep > 0 && fwrite(buf, 1, (size_t)keep, of) != (size_t)keep) {
+            free(buf); rc = sesame__fail(err, SESAME_ERR_IO, "short write to %s", out_cx); goto out;
         }
-
-        /* The output record, initialised to the format's own "absent" so a
-         * target in no pair reads as missing, never as a value. */
-        memset(&o, 0, sizeof o);
-        o.compressed = 0; o.n = (uint64_t)m->ntgt;
-        if (depth > 0 || in3) {                                /* M/U, 0,0 = missing */
-            o.fmt = '3'; o.unit = 8; o.s = (uint8_t *)calloc((size_t)m->ntgt, 8);
-        } else if (in4) {                                      /* betas, NA = -1.0 */
-            float *s = (float *)malloc((size_t)m->ntgt * sizeof(float));
-            o.fmt = '4'; o.unit = sizeof(float); o.s = (uint8_t *)s;
-            if (s) for (int64_t r = 0; r < m->ntgt; r++) s[r] = -1.0f;
-        } else if (d.fmt == '0') {                             /* 1 bit per row */
-            o.fmt = '0'; o.unit = d.unit; o.s = (uint8_t *)calloc(((size_t)m->ntgt + 7) >> 3, 1);
-        } else if (d.fmt == '6') {                             /* 2 bits per row */
-            o.fmt = '6'; o.unit = d.unit; o.s = (uint8_t *)calloc(((size_t)m->ntgt + 3) >> 2, 1);
-        } else if (d.fmt == '2') {                             /* state track */
-            /* Layout is [keys...][\0][rows...]: the key table rides across
-             * unchanged (as rowsub's slice does it) and the rows follow it.
-             * calloc leaves an unmapped row at code 0 -- the track's FIRST
-             * state, which for an MRMP is the null pattern (Pna). */
-            uint64_t keys_nb = fmt2_get_keys_nbytes(&d);
-            o.fmt = '2'; o.unit = d.unit;
-            o.s = (uint8_t *)calloc(1, (size_t)keys_nb + 1 + (size_t)m->ntgt * d.unit);
-            if (o.s) memcpy(o.s, d.s, (size_t)keys_nb + 1);
-        } else {                                               /* '1', '5': unit-wide */
-            o.fmt = d.fmt; o.unit = d.unit; o.s = (uint8_t *)calloc((size_t)m->ntgt, d.unit);
-        }
-        if (!o.s) { lo_free2(&c, &d, is_mask); rc = sesame__fail(err, SESAME_ERR_NOMEM, "oom"); goto out; }
-        /* where the rows start, for the unit-wide copy: after the key table
-         * on a state track, at the buffer start otherwise */
-        const uint8_t *ibase = d.fmt == '2' ? fmt2_get_data(&d) : d.s;
-        uint8_t *obase = d.fmt == '2' ? o.s + fmt2_get_keys_nbytes(&d) + 1 : o.s;
-
-        /* One pass over the pairs; each run of equal targets is one reduction. */
-        for (k = 0; k < m->npair; ) {
-            int64_t t = m->tgt[k], k2 = k;
-            if (numeric && (depth > 0 || in4)) {               /* mean of non-NA betas */
-                double sum = 0.0; int n = 0;
-                for (; k2 < m->npair && m->tgt[k2] == t; k2++) {
-                    double v = lo_beta(&d, m->src[k2]);
-                    if (!isnan(v)) { sum += v; n++; }
-                }
-                if (n) {
-                    double v = sum / n;
-                    if (depth > 0) {
-                        uint64_t M = (uint64_t)llround(v * depth);
-                        f3_set_mu(&o, (uint64_t)t, M, (uint64_t)depth - M);
-                    } else ((float *)o.s)[t] = (float)v;
-                }
-            } else if (in3) {                                  /* real counts: pool */
-                uint64_t M = 0, U = 0;
-                for (; k2 < m->npair && m->tgt[k2] == t; k2++) {
-                    uint64_t mu = f3_get_mu(&d, (uint64_t)m->src[k2]);
-                    M += mu >> 32; U += mu & 0xffffffffULL;
-                }
-                f3_set_mu(&o, (uint64_t)t, M, U);
-            } else if (d.fmt == '0') {                         /* OR */
-                int bit = 0;
-                for (; k2 < m->npair && m->tgt[k2] == t; k2++) {
-                    int64_t s = m->src[k2];
-                    if (d.s[s >> 3] & (1u << (s & 7))) bit = 1;
-                }
-                if (bit) o.s[t >> 3] |= (uint8_t)(1u << (t & 7));
-            } else if (d.fmt == '6') {                         /* max code */
-                uint8_t v = 0;
-                for (; k2 < m->npair && m->tgt[k2] == t; k2++) {
-                    int64_t s = m->src[k2];
-                    uint8_t x = (d.s[s >> 2] >> ((s & 3) * 2)) & 3;
-                    if (x > v) v = x;
-                }
-                o.s[t >> 2] |= (uint8_t)(v << ((t & 3) * 2));
-            } else {                                           /* first wins */
-                memcpy(obase + (size_t)o.unit * (size_t)t, ibase + (size_t)d.unit * (size_t)m->src[k], o.unit);
-                for (; k2 < m->npair && m->tgt[k2] == t; k2++) ;
-            }
-            k = k2;
-        }
-
-        if (ns >= cap) {
-            cap = cap ? cap * 2 : 8;
-            offs = (int64_t *)realloc(offs, (size_t)cap * sizeof(int64_t));
-            names = (char **)realloc(names, (size_t)cap * sizeof(char *));
-        }
-        offs[ns] = bgzf_tell(fp);
-        cdata_compress(&o);
-        cdata_write1(fp, &o);
-        free(o.s);
-        names[ns] = strdup(ns < sn.n ? sn.s[ns] : "");
-        ns++;
-        lo_free2(&c, &d, is_mask);
+        pos += keep;
+        free(buf);
+        names[i] = strdup(i < sn.n ? sn.s[i] : "");
     }
-    bgzf_close(fp); fp = NULL;
-    lo_write_idx(out_cx, names, offs, ns);
+    if (have_eof) fwrite(eof, 1, 28, of);
+    fclose(of); of = NULL;
+    lo_write_idx(out_cx, names, offs, x.nrec);
 out:
-    if (fp) bgzf_close(fp);
-    bgzf_close(cf.fh);
-    cleanSampleNames2(sn);
-    for (i = 0; i < ns; i++) free(names[i]);
+    if (of) fclose(of);
+    for (i = 0; i < x.nrec; i++) {
+        char part[4096];
+        if (x.in[i].s) free_cdata(&x.in[i]);
+        lo_part_name(part, sizeof part, out_cx, i); unlink(part);   /* leftovers on error */
+    }
+    free(x.in); free(th);
+    if (names) for (i = 0; i < x.nrec; i++) free(names[i]);
     free(names); free(offs);
+    cleanSampleNames2(sn);
+    pthread_mutex_destroy(&x.mu);
     return rc;
 }
 

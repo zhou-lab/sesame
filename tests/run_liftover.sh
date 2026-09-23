@@ -121,6 +121,14 @@ run_genome() {
         --simulated-depth 100 "$work/gp/beta.cg" "$work/wg.cg" 2>/dev/null
     "$bin" mliftover --to "$sp" --platform "$gen" --index-to "$so" \
         "$work/wg.cg" "$work/back.cg" 2>/dev/null
+    ## the same lifts at 4 threads must be byte-identical: records are
+    ## independent and written in input order, whatever thread did them
+    "$bin" mliftover --to "$gen" --platform "$sp" --index "$so" --threads 4 \
+        --simulated-depth 100 "$work/gp/beta.cg" "$work/wg4.cg" 2>/dev/null
+    "$bin" mliftover --to "$sp" --platform "$gen" --index-to "$so" --threads 4 \
+        "$work/wg.cg" "$work/back4.cg" 2>/dev/null
+    cmp -s "$work/wg.cg" "$work/wg4.cg" && cmp -s "$work/back.cg" "$work/back4.cg" \
+        && same4=identical || same4=DIFFERENT
 
     ## the reference, from the same two store files
     zcat < "$co" | tail -n +2 | awk -F'\t' '{print $1"_"($2+1)}' > "$work/pk.txt"
@@ -152,9 +160,9 @@ run_genome() {
         END{printf "%d %.4f", n+0, mx+0}')
     set -- $r2; nback=$1; mxback=$2
 
-    echo "ok   $sp -> $gen -> $sp: universe=$nu rows=$nc covered=$covered coverage-mismatch=$covmis max|dM|=$mxd; back: $nback probes max|dbeta|=$mxback"
+    echo "ok   $sp -> $gen -> $sp: universe=$nu rows=$nc covered=$covered coverage-mismatch=$covmis max|dM|=$mxd; back: $nback probes max|dbeta|=$mxback; 4 threads: $same4"
     if [ "$nc" -ne "$nu" ] || [ "$covmis" -ne 0 ] || [ "$mxd" -gt 1 ] || [ "$covered" -eq 0 ] \
-       || [ "$nback" -eq 0 ] || awk "BEGIN{exit !($mxback > 0.0051)}"; then
+       || [ "$nback" -eq 0 ] || [ "$same4" != identical ] || awk "BEGIN{exit !($mxback > 0.0051)}"; then
         echo "FAIL: genome lift diverges from the reference"; FAIL=$((FAIL+1)); return; fi
     PASS=$((PASS+1))
 }

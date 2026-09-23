@@ -304,6 +304,8 @@ static int usage_liftover(void)
     yame_usage_cont("(methscope classify) reads. Default: keep the input format.");
     yame_usage_opt("--coords FILE", "the array side's <plat>.<genome>.coord.tsv.gz");
     yame_usage_cont("(default: the store's)");
+    yame_usage_opt("--threads N, -t", "worker threads sharing the one map in-process");
+    yame_usage_cont("(default: number of CPUs); output is identical at any N");
     yame_usage_opt("--index FILE", "source ordering .tsv.gz (default: the store's)");
     yame_usage_opt("--index-to FILE", "target ordering .tsv.gz (default: the store's)");
 
@@ -1658,11 +1660,12 @@ static int cmd_liftover(int argc, char **argv)
     char sres[4096], tres[4096], crbuf[4096], cobuf[4096], cfile[512], help[1024];
     sesame_index_t *six = NULL, *tix = NULL;
     sesame_rowmap_t *map = NULL, *inv = NULL;
-    int depth = 0, to_genome = 0, from_genome = 0, i, rc = 1;
+    int depth = 0, nthreads = 0, to_genome = 0, from_genome = 0, i, rc = 1;
     sesame_err_t e;
 
     for (i = 0; i < argc; i++) {
         if (strcmp(argv[i], "--to") == 0 && i+1 < argc) tgt_plat = argv[++i];
+        else if ((strcmp(argv[i],"--threads")==0||strcmp(argv[i],"-t")==0) && i+1<argc) nthreads = (int)strtol(argv[++i],NULL,10);
         else if (strcmp(argv[i], "--platform") == 0 && i+1 < argc) src_plat = argv[++i];
         else if (strcmp(argv[i], "--simulated-depth") == 0 && i+1 < argc) depth = atoi(argv[++i]);
         else if (strcmp(argv[i], "--coords") == 0 && i+1 < argc) coords = argv[++i];
@@ -1754,7 +1757,7 @@ static int cmd_liftover(int argc, char **argv)
             src_plat, tgt_plat, how, (long long)map->nsrc_mapped, (long long)map->nsrc,
             (long long)map->ntgt_covered, (long long)map->ntgt, (long long)map->ntgt_multi);
 
-    if (sesame_liftover_apply(inpath, outpath, map, depth, &e) != SESAME_OK) {
+    if (sesame_liftover_apply(inpath, outpath, map, depth, nthreads, &e) != SESAME_OK) {
         fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
     fprintf(stderr, "sesame: lifted %s -> %s to %s%s\n", inpath, tgt_plat, outpath,
             depth ? " (format 3, simulated depth on every covered row; 0,0 elsewhere)" : "");

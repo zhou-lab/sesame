@@ -357,7 +357,9 @@ int sesame_liftover_betas(const char *src_platform, const sesame_index_t *src_ix
  * keeps the format's "absent" (NA / 0,0 / bit 0 / code 0). Output is
  * positional to the target space. depth > 0 writes format 3 with M+U == depth
  * on every covered row (betas re-encoded as pseudo-counts, what a whole-genome
- * model such as methscope reads); depth == 0 keeps the input's format. */
+ * model such as methscope reads); depth == 0 keeps the input's format.
+ * nthreads workers share the one map in-process (0 = the machine's CPUs);
+ * records are independent, so the output is byte-identical at any count. */
 typedef struct {
     int64_t nsrc, ntgt;               /* rows in the source / target space   */
     int64_t npair;
@@ -376,7 +378,8 @@ int sesame_rowmap_invert(const sesame_rowmap_t *in, sesame_rowmap_t **out,
                          sesame_err_t *err);
 void sesame_rowmap_free(sesame_rowmap_t *m);
 int sesame_liftover_apply(const char *in_cx, const char *out_cx,
-                          const sesame_rowmap_t *m, int depth, sesame_err_t *err);
+                          const sesame_rowmap_t *m, int depth, int nthreads,
+                          sesame_err_t *err);
 
 /* imputeBetasMatrixByMean (R/impute.R): fill NaN in a sample-major matrix
  * [nsamp*nprobe] in place with axis=1 (per probe, mean across samples) or axis=2

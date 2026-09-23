@@ -570,7 +570,8 @@ sesame <span class="sub">impute</span> --method neighbors \
       <code class="inl">cpg_nocontig.cr</code>, built in memory each run (~2 s, nothing to
       fetch). Replicate probes on one CpG are averaged, rs/ch/unmapped probes are
       dropped and counted, and the way back is lossy — CpGs under no probe are gone.
-      Any format lifts, a <code class="inl">.cm</code> mask included. <b>impute</b> fills NAs by the probe's cross-sample mean,
+      Any format lifts, a <code class="inl">.cm</code> mask included; <code class="inl">--threads N</code>
+      runs the records across workers that share the one map. <b>impute</b> fills NAs by the probe's cross-sample mean,
       or the nearest same-strand genomic neighbours (imputeBetas*).</p>
     <p style="margin-top:9px">Both are local fills — a neighbouring CpG or the column
       mean — and they only reach probes the array already carries. For imputation as
