@@ -1,4 +1,4 @@
-# sesame-cli
+# Sesame2
 
 [![build](https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml/badge.svg)](https://github.com/zwdzwd/sesame-cli/actions/workflows/conda-build.yml)
 [![conda](https://img.shields.io/conda/vn/zhou-lab/sesame?label=conda)](https://anaconda.org/zhou-lab/sesame)
@@ -10,9 +10,17 @@
 [![vs R](https://img.shields.io/badge/betas%20vs%20R-bit--identical-success)](NUMERICS.md)
 
 Infinium DNA-methylation analysis as a single C binary — **IDAT → betas → QC,
-differential methylation, and copy number** — with no R and no Bioconductor. A
-standalone reimplementation of [sesame](https://github.com/zwdzwd/sesame) /
+differential methylation, and copy number** — with no R and no Bioconductor.
+Sesame2 is the second implementation of [sesame](https://github.com/zwdzwd/sesame) /
 `openSesame`, validated against the R package as a permanent oracle.
+
+> **Sesame2 (2.x, this C command line) and sesame (1.x, the R/Bioconductor
+> package) are parallel, not sequential.** Neither is an upgrade of the other:
+> one is an R package you `library()`, the other a binary you run in a shell.
+> They share a name because they are one project and one method, and they are
+> installed from different places — `BiocManager::install("sesame")` for the R
+> package, `conda install -c zhou-lab sesame` for this one. The R package
+> stays on the 1.x series.
 
 <img src="docs/figures/pipeline.svg" alt="sesame-cli workflow" width="100%">
 

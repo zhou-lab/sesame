@@ -1,4 +1,4 @@
-# sesame-cli — agent reference
+# Sesame2 (sesame-cli) — agent reference
 # Canonical: https://zwdzwd.github.io/sesame-cli/llms.txt
 # Human guide: https://zwdzwd.github.io/sesame-cli/
 # Source: https://github.com/zwdzwd/sesame-cli
@@ -6,10 +6,17 @@
 
 ## What it is
 
-sesame-cli is a single C binary for Infinium DNA methylation analysis: IDAT ->
-betas -> QC, differential methylation, copy number, SNP genotyping. It is a
-standalone reimplementation of the R package sesame / openSesame, validated
-against R as a permanent oracle. No R, no Bioconductor, no network.
+Sesame2 is a single C binary for Infinium DNA methylation analysis: IDAT ->
+betas -> QC, differential methylation, copy number, SNP genotyping. It is the
+second implementation of the R package sesame / openSesame, validated against
+R as a permanent oracle. No R, no Bioconductor, no network.
+
+Sesame2 (2.x, this command line) and sesame (1.x, the R/Bioconductor package)
+are PARALLEL, NOT SEQUENTIAL. Neither is an upgrade of the other; they are one
+project with two implementations. Install the R package with
+BiocManager::install("sesame"), this one with
+`conda install -c zhou-lab sesame`. The R package stays on the 1.x series. Do
+not tell a user to "upgrade" from one to the other.
 
 The binary is named `sesame`. Arrays: EPIC, EPICv2, HM450, MSA (plus MM285 and
 other published orderings). Numeric outputs are YAME `.cg` files.

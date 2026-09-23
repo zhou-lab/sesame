@@ -2,7 +2,7 @@
 ## method is called. The GitHub repo stays sesame-cli, so home/dev_url below
 ## are unchanged; only the installable name differs.
 {% set name = "sesame" %}
-{% set version = "0.5" %}
+{% set version = "2.0.0" %}
 
 package:
   name: {{ name }}
@@ -45,9 +45,9 @@ requirements:
     # tags compiled into src/registry.h. From v1.50 the fetch address is the
     # store path (`yame fetch -y EPICv2`), which is what our error messages
     # print; the older `InfiniumAnnotation/EPICv2` spelling stops resolving in
-    # v1.52, so the floor is not cosmetic. v1.53 is the release this build is
+    # v1.52, so the floor is not cosmetic. v1.54 is the release this build is
     # pinned to and whose catalog src/registry.h projects.
-    - yame >=1.53
+    - yame >=1.54
 
 test:
   commands:
@@ -62,7 +62,7 @@ about:
   license: LicenseRef-CHOP-Academic-BSD-2-Clause
   license_family: OTHER
   license_file: LICENSE
-  summary: Standalone C reimplementation of sesame's Infinium methylation preprocessing (IDAT -> betas), with QC, DML, and CNV.
+  summary: Sesame2 - the C implementation of sesame's Infinium methylation preprocessing (IDAT -> betas), with QC, DML, and CNV.
   description: |
     sesame is a dependency-light C program that reproduces the sesame /
     openSesame Infinium DNA-methylation workflow without R or Bioconductor:
