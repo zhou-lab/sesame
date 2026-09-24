@@ -32,10 +32,13 @@
 #include <unistd.h>
 
 /* The help is styled, but only when someone is looking: every colour below
- * comes from YAME's ui.c, which returns an empty string off a TTY, under
- * NO_COLOR, or on a dumb terminal. So `sesame 2>&1 | less` stays readable and
- * the bytes are what they were before any of this. Sharing the helpers with
- * yame and kycg is also what keeps the three from looking like different
+ * comes from YAME's ui.c, which returns an empty string off a TTY or on a
+ * dumb terminal. So `sesame 2>&1 | less` stays readable and the bytes are
+ * what they were before any of this -- which is also why the docs gate and
+ * docs/build_help.py can capture `-h` through a pipe and compare it. YAME
+ * stopped reading NO_COLOR at v1.58; a terminal gets colour either way, so
+ * do not describe that variable as an escape hatch here. Sharing the helpers
+ * with yame and kycg is what keeps the three from looking like different
  * programs. */
 #define H_TITLE  yame_ui_bold()
 #define H_KEY    yame_ui_cyan()
