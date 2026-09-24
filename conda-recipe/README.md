@@ -54,7 +54,7 @@ release:
 ```sh
 # bump `version` in conda-recipe/meta.yaml and SESAME_VERSION in include/sesame.h,
 # commit, then:
-git tag -a v2.1.0 -m "sesame 2.1.0" && git push origin v2.1.0
+git tag -a v2.2.0 -m "sesame 2.2.0" && git push origin v2.2.0
 ```
 
 ## Notes

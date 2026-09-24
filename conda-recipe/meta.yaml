@@ -2,7 +2,7 @@
 ## method is called. The GitHub repo stays sesame-cli, so home/dev_url below
 ## are unchanged; only the installable name differs.
 {% set name = "sesame" %}
-{% set version = "2.1.0" %}
+{% set version = "2.2.0" %}
 
 package:
   name: {{ name }}
