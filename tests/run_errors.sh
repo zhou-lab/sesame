@@ -76,6 +76,7 @@ while [ $i -le 5 ]; do
     i=$((i+1))
 done
 "$mu2cg" "$work/mu.tsv" "$work/s1.cg" >/dev/null 2>&1
+printf 'cg0000001_BC21\n' > "$work/ids.txt"
 
 # --- idat.c: what a file that is not the IDAT you think it is looks like -----
 expect "idat: not an IDAT"    "invalid IDAT magic"       -- "$bin" idat-dump --tsv "$work/text.txt"
@@ -83,6 +84,29 @@ expect "idat: truncated head" "short read on version"    -- "$bin" idat-dump --t
 expect "idat: version 2"      "unsupported IDAT version" -- "$bin" idat-dump --tsv "$work/v2.idat"
 expect "idat: truncated body" "short read on nFields"    -- "$bin" idat-dump --tsv "$work/v3.idat"
 expect "idat: missing file"   "cannot open"              -- "$bin" idat-dump --tsv "$work/nosuch.idat"
+
+## The IDAT header is read field by field, and every one of those reads is a
+## place a truncated download stops. A file that ends mid-field must say where.
+printf 'IDAT\003\0\0\0\0\0\0\0\001\0\0\0' > "$work/short_table.idat"   # 1 field, no table
+printf 'IDAT\003\0\0\0\0\0\0\0\377\377\0\0' > "$work/many_fields.idat"  # 65535 fields
+expect "idat: short field table" "short read in field table" \
+    -- "$bin" idat-dump --tsv "$work/short_table.idat"
+expect "idat: implausible nFields" "implausible nFields" \
+    -- "$bin" idat-dump --tsv "$work/many_fields.idat"
+
+# --- index.c: an ordering that is not one ------------------------------------
+## The ordering defines the row space of every positional file, so a malformed
+## one has to stop the run: a wrong column count or a bad address here would
+## otherwise shift every probe silently.
+printf 'Probe_ID\tM\tU\tcol\n' | gzip -c > "$work/ord_empty.tsv.gz"
+printf 'Probe_ID\tM\tU\tcol\ncg0000001_BC21\tNA\t7\n' | gzip -c > "$work/ord_narrow.tsv.gz"
+printf 'Probe_ID\tM\tU\tcol\ncg0000001_BC21\tNA\tnotanumber\t2\n' | gzip -c > "$work/ord_addr.tsv.gz"
+expect "index: no data rows"  "no data rows" \
+    -- "$bin" describe-probe --platform "$work/ord_empty.tsv.gz" "$work/s1.cg"
+expect "index: field count"   "expected 4 or 5" \
+    -- "$bin" describe-probe --platform "$work/ord_narrow.tsv.gz" "$work/s1.cg"
+expect "index: bad address"   "bad address" \
+    -- "$bin" describe-probe --platform "$work/ord_addr.tsv.gz" "$work/s1.cg"
 
 # --- cache.c: an empty store must say which command fills it -----------------
 ## a known platform quotes the registry's ordering name and the pinned tag
@@ -105,6 +129,10 @@ expect "store: no cnv panel"  "no normal panel for EPICv2" \
 ## send the user looking for hg38.ordering.tsv.gz (it did until 2026-09-24)
 expect "store: no genome"     "no genome annotation for hg38" \
     -- "$bin" mliftover --platform EPICv2 --to hg38 "$work/s1.cg" "$work/o.cg"
+## a platform whose ordering IS in the store but whose companion table is not:
+## the error names the file and the one fetch that brings it
+expect "store: no coord"      "no EPICv2.testgenome.coord.tsv.gz in the store" \
+    -- "$bin" describe-probe --platform EPICv2 --genome testgenome "$work/ids.txt"
 YAME_DATA_HOME="$empty"
 export YAME_DATA_HOME
 

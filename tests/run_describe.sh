@@ -11,6 +11,7 @@ here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(dirname "$here")
 bin="$root/sesame"
 mu2cg="$root/mu2cg"
+yame="$root/YAME/yame"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -154,6 +155,82 @@ grep -q 'attach-probe is now describe-probe' "$work/c7.err" || { echo "FAIL: ali
 
 if [ $cfail -eq 0 ]; then
     echo "ok   describe-probe --genome: replicates + 1-based + drops counted + stdin + alias"
+    pass=$((pass+1))
+else
+    fail=1
+fi
+
+# --- the columns and containers the two modes above never touch ---------------
+# --with carries ordering columns through, and the YAME renderer has a branch
+# per format. Both are easy to leave untested and easy to get wrong: a .cm
+# renders a mask BIT, a fmt2 track renders a state NAME, and --with reads the
+# ordering's own M/U/col/mask rather than the data file.
+wfail=0
+
+## a 5-col ordering carries the mask inline; --with all must print, in order,
+## M, U, col and mask beside the Probe_ID
+"$bin" describe-probe --with all --index "$work/ord5.tsv.gz" "$work/coord.tsv" \
+    > "$work/with.out" 2>/dev/null
+[ "$(sed -n '1p' "$work/with.out")" = "$(printf 'Probe_ID\tM\tU\tcol\tmask\tchrm\tpos')" ] \
+    || { echo "FAIL: --with header '$(sed -n '1p' "$work/with.out")'"; wfail=1; }
+## probe 1 of the fixture: M is NA, U is 1001, col 2 (Infinium-II), mask 0
+[ "$(sed -n '2p' "$work/with.out")" = "$(printf 'cg0000001_BC21\tNA\t1001\t2\t0\tchr1\t5001')" ] \
+    || { echo "FAIL: --with row '$(sed -n '2p' "$work/with.out")'"; wfail=1; }
+
+## the same columns one at a time, so a wrong order cannot hide in "all"
+"$bin" describe-probe --with U,col --index "$work/ord5.tsv.gz" "$work/coord.tsv" \
+    > "$work/with2.out" 2>/dev/null
+[ "$(sed -n '2p' "$work/with2.out")" = "$(printf 'cg0000001_BC21\t1001\t2\tchr1\t5001')" ] \
+    || { echo "FAIL: --with U,col row"; wfail=1; }
+
+## --no-header says the INPUT has no header row, so it takes a headerless
+## file and emits no header of its own -- five rows in, five out
+i=1; : > "$work/coord_nh.tsv"
+while [ $i -le 5 ]; do printf 'chr1\t%d\n' "$((5000+i))" >> "$work/coord_nh.tsv"; i=$((i+1)); done
+if "$bin" describe-probe --no-header --index "$work/ord5.tsv.gz" "$work/coord_nh.tsv" \
+     > "$work/nohdr.out" 2>/dev/null; then
+    [ "$(wc -l < "$work/nohdr.out")" -eq 5 ] || { echo "FAIL: --no-header row count"; wfail=1; }
+    [ "$(sed -n '1p' "$work/nohdr.out")" = "$(printf 'cg0000001_BC21\tchr1\t5001')" ] \
+        || { echo "FAIL: --no-header first row '$(sed -n '1p' "$work/nohdr.out")'"; wfail=1; }
+else
+    echo "FAIL: --no-header errored on a headerless file"; wfail=1
+fi
+
+## a fmt0 .cm renders the mask BIT, not a number: yame packs a bitset from a
+## column of 0/1, and row 3 of this one is set
+if command -v "$yame" >/dev/null 2>&1 || [ -x "$yame" ]; then
+    printf '0\n0\n1\n0\n0\n' > "$work/bits.txt"
+    if "$yame" pack -f b "$work/bits.txt" "$work/m.cm" >/dev/null 2>&1; then
+        "$bin" describe-probe --index "$work/ord5.tsv.gz" "$work/m.cm" \
+            > "$work/cm.out" 2>/dev/null || true
+        [ "$(sed -n '4p' "$work/cm.out" | cut -f2)" = "1" ] \
+            && [ "$(sed -n '2p' "$work/cm.out" | cut -f2)" = "0" ] \
+            || { echo "FAIL: fmt0 mask bit"; sed 's/^/    /' "$work/cm.out" | head -3; wfail=1; }
+    fi
+fi
+
+## a text row longer than the reader's initial buffer must come back whole:
+## the ordering is small, so a 100 kB field is the cheapest way to force the
+## grow-and-continue path that a real .coord.tsv.gz line never reaches
+long=$(/usr/bin/awk 'BEGIN{ s=""; while (length(s) < 100000) s = s "x"; print s }')
+{ printf 'chrm\tnote\n'; i=1
+  while [ $i -le 5 ]; do printf 'chr1\t%s\n' "$long"; i=$((i+1)); done
+} > "$work/long.tsv"
+"$bin" describe-probe --index "$work/ord5.tsv.gz" "$work/long.tsv" > "$work/long.out" 2>/dev/null || true
+[ "$(wc -l < "$work/long.out")" -eq 6 ] || { echo "FAIL: long line row count"; wfail=1; }
+[ "$(sed -n '2p' "$work/long.out" | cut -f3 | wc -c)" -eq 100001 ] \
+    || { echo "FAIL: long field truncated"; wfail=1; }
+
+## two files side by side must share one ordering; a shorter one is a lineage
+## error, not a silent zip
+if "$bin" describe-probe --index "$work/ord5.tsv.gz" "$work/s1.cg" "$work/m.cm" \
+     > "$work/two.out" 2>/dev/null; then
+    [ "$(sed -n '1p' "$work/two.out" | /usr/bin/awk -F'\t' '{print NF}')" -ge 3 ] \
+        || { echo "FAIL: two files did not widen"; wfail=1; }
+fi
+
+if [ $wfail -eq 0 ]; then
+    echo "ok   describe-probe: --with columns, --no-header, fmt0 bit, long rows"
     pass=$((pass+1))
 else
     fail=1
