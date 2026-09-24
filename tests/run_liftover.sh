@@ -59,6 +59,9 @@ find_ord() {   # echo the first existing ordering for platform $1
 PASS=0; FAIL=0
 run_pair() {
     sp=$1; rel=$2; tp=$3
+    ## SESAME_ONLY: an ERE over "<platform> <prefix> ..."; cases that do not
+    ## match are skipped so a parallel gate can run one case per job.
+    if [ -n "${SESAME_ONLY:-}" ] && ! echo "$*" | grep -Eq "$SESAME_ONLY"; then return; fi
     so=$(find_ord "$sp"); to=$(find_ord "$tp")
     pfx="$idats/$rel"
     [ -n "$so" ] && [ -n "$to" ] || { echo "SKIP $sp->$tp: missing ordering"; return; }
@@ -105,9 +108,126 @@ PY
     then PASS=$((PASS+1)); else sed 's/^/    /' "$work/r.err" | head -4; FAIL=$((FAIL+1)); fi
 }
 
+## Formats other than beta: a .cm carries no numbers, so the reductions are
+## different code -- OR for a mask bit (fmt0), first-wins for a state track
+## (fmt2). EPICv2 -> EPIC is many-to-one (replicate probes collapse), which is
+## exactly where a reduction can be wrong without any single probe looking it.
+run_cm() {
+    sp=$1; tp=$2; file=$3; label=$4
+    if [ -n "${SESAME_ONLY:-}" ] && ! echo "$*" | grep -Eq "$SESAME_ONLY"; then return; fi
+    so=$(find_ord "$sp"); to=$(find_ord "$tp")
+    src="$store/$sp/$file"
+    [ -n "$so" ] && [ -n "$to" ] && [ -f "$src" ] || {
+        echo "SKIP $label: need $file and both orderings in the store"; return; }
+
+    "$bin" mliftover --platform "$sp" --to "$tp" --index "$so" --index-to "$to" \
+        "$src" "$work/cm.out" 2>/dev/null || {
+        echo "FAIL $label: mliftover errored"; FAIL=$((FAIL+1)); return; }
+
+    ## rows must be the TARGET universe, and the sample count must survive
+    nt=$(zcat "$to" | tail -n +2 | wc -l | tr -d ' ')
+    got=$("$yame" info "$work/cm.out" | awk 'NR==2{print $4}')
+    nsi=$("$yame" info "$src"          | awk 'NR==2{print $3}')
+    nso=$("$yame" info "$work/cm.out"  | awk 'NR==2{print $3}')
+    fmi=$("$yame" info "$src"          | awk 'NR==2{print $5}')
+    fmo=$("$yame" info "$work/cm.out"  | awk 'NR==2{print $5}')
+    [ "$got" = "$nt" ] || { echo "FAIL $label: $got rows, target ordering has $nt"; FAIL=$((FAIL+1)); return; }
+    [ "$nsi" = "$nso" ] || { echo "FAIL $label: $nsi samples in, $nso out"; FAIL=$((FAIL+1)); return; }
+    [ "$fmi" = "$fmo" ] || { echo "FAIL $label: format $fmi in, $fmo out"; FAIL=$((FAIL+1)); return; }
+
+    ## The join our C does, redone here: probes match on the cg number before
+    ## the design suffix. For every target probe with at least one source, the
+    ## lifted value must be what the reduction says -- OR over the sources for
+    ## a mask, the first source for a state track.
+    "$yame" unpack -a "$src"          > "$work/cm.src.txt" 2>/dev/null
+    "$yame" unpack -a "$work/cm.out"  > "$work/cm.out.txt" 2>/dev/null
+    zcat "$so" | tail -n +2 | cut -f1 > "$work/cm.sid"
+    zcat "$to" | tail -n +2 | cut -f1 > "$work/cm.tid"
+    bad=$(\awk -v red="$5" '
+        ## the join is defined on the probe families that carry a design
+        ## suffix; control names differ between the two orderings by an
+        ## annotation suffix (DIVERGENCES.md, C:liftover-ctl-name) and are
+        ## deliberately out of scope here
+        function key(id) { if (id !~ /^(cg|ch|rs)/) return ""; sub(/_.*$/, "", id); return id }
+        FNR==NR && FILENAME==ARGV[1] { sid[FNR]=key($0); next }
+        FILENAME==ARGV[2] { tid[FNR]=key($0); nt=FNR; next }
+        FILENAME==ARGV[3] { sv[FNR]=$1; next }
+        FILENAME==ARGV[4] { tv[FNR]=$1; next }
+        END {
+            for (i in sv) { k=sid[i]
+                if (k == "") continue
+                if (!(k in first)) first[k]=sv[i]
+                if (sv[i] != "0" && sv[i] != "NA") any[k]=1
+            }
+            bad=0
+            for (j=1; j<=nt; j++) { k=tid[j]
+                if (k == "") continue                # control row, see key()
+                if (!(k in first)) continue          # no source -> absent, not checked here
+                want = (red=="or") ? ((k in any) ? 1 : 0) : first[k]
+                got  = tv[j]
+                if (red=="or") got = (got!="0" && got!="NA") ? 1 : 0
+                if (got != want) bad++
+            }
+            print bad
+        }' "$work/cm.sid" "$work/cm.tid" "$work/cm.src.txt" "$work/cm.out.txt")
+    if [ "$bad" = "0" ]; then
+        echo "ok   $label: $nt rows, $nso sample(s), fmt $fmo, reduction exact"
+        PASS=$((PASS+1))
+    else
+        echo "FAIL $label: $bad target probes disagree with the reduction"
+        FAIL=$((FAIL+1))
+    fi
+}
+
+## The refusals. A .cg carries no probe ids, so the ONLY thing standing between
+## a wrong file and a silently misaligned lift is the row count -- which makes
+## these messages load-bearing rather than cosmetic.
+run_refusals() {
+    if [ -n "${SESAME_ONLY:-}" ] && ! echo "refusals" | grep -Eq "$SESAME_ONLY"; then return; fi
+    so=$(find_ord EPICv2); to=$(find_ord EPIC)
+    [ -n "$so" ] && [ -n "$to" ] || { echo "SKIP refusals: need both orderings"; return; }
+    mu2cg="$root/mu2cg"
+    [ -x "$mu2cg" ] || { echo "SKIP refusals: $mu2cg not built"; return; }
+
+    ## a 5-row .cg is not indexed to any array
+    printf 'Probe_ID\tS1_M\tS1_U\n' > "$work/r.mu.tsv"
+    i=1
+    while [ $i -le 5 ]; do
+        printf 'cg%07d_BC21\t%d\t%d\n' "$i" "$((100*i))" "$((10*i))" >> "$work/r.mu.tsv"
+        i=$((i+1))
+    done
+    "$mu2cg" "$work/r.mu.tsv" "$work/r.cg" >/dev/null 2>&1
+
+    ## a coord table that does not match the ordering it is paired with
+    printf 'CpG_chrm\tCpG_beg\nchr1\t5\n' > "$work/r.coord.tsv"
+    gzip -f "$work/r.coord.tsv"
+
+    n=0
+    check() {  # label, expected stderr fragment, then the command
+        lbl=$1; want=$2; shift 2
+        if "$@" > "$work/r.out" 2> "$work/r.err"; then
+            echo "FAIL refusal $lbl: exited 0"; FAIL=$((FAIL+1)); return
+        fi
+        if grep -qF -- "$want" "$work/r.err"; then n=$((n+1)); else
+            echo "FAIL refusal $lbl: stderr lacks '$want'"
+            sed 's/^/    /' "$work/r.err" | head -3; FAIL=$((FAIL+1))
+        fi
+    }
+    check "row space" "not indexed to it" \
+        "$bin" mliftover --platform EPICv2 --to EPIC --index "$so" --index-to "$to" \
+               "$work/r.cg" "$work/r.lift.cg"
+    check "coord lineage" "lineage mismatch" \
+        "$bin" mliftover --platform EPICv2 --to "$gen_for_refusal" --index "$so" \
+               --coords "$work/r.coord.tsv.gz" "$work/r.cg" "$work/r.lift2.cg"
+    [ "$n" -eq 2 ] && { echo "ok   refusals: wrong row space and wrong coord lineage both named"; PASS=$((PASS+1)); }
+}
+
 ## array -> genome -> array, against an in-test reference (no R)
 run_genome() {
     sp=$1; rel=$2; gen=$3
+    ## SESAME_ONLY: an ERE over "<platform> <prefix> ..."; cases that do not
+    ## match are skipped so a parallel gate can run one case per job.
+    if [ -n "${SESAME_ONLY:-}" ] && ! echo "$*" | grep -Eq "$SESAME_ONLY"; then return; fi
     so=$(find_ord "$sp"); pfx="$idats/$rel"
     cr="$store/$gen/cpg_nocontig.cr"; co="$store/$sp/$sp.$gen.coord.tsv.gz"
     [ -n "$so" ] && [ -f "$cr" ] && [ -f "$co" ] || {
@@ -170,6 +290,12 @@ run_genome() {
         echo "FAIL: genome lift diverges from the reference"; FAIL=$((FAIL+1)); return; fi
     PASS=$((PASS+1))
 }
+
+gen_for_refusal=hg38
+run_refusals
+
+run_cm EPICv2 EPIC KYCG/CGI.20220904.cm        "EPICv2->EPIC mask (fmt0, OR)"        or
+run_cm EPICv2 EPIC KYCG/ChromHMM.20220303.cm  "EPICv2->EPIC states (fmt2, first)"   first
 
 run_pair EPICv2 EPICv2/206909630040_R03C01           EPIC
 run_pair EPIC   EPIC/GSM2995280_201868590258_R01C01  EPICv2

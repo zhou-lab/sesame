@@ -46,51 +46,8 @@ static int read_gzline(gzFile f, char **buf, size_t *cap)
     return 1;
 }
 
-/* Per-probe coordinates, positional in the ordering. chrom[i] is a strdup'd
- * chromosome ("" if unmapped), pos[i] the start (or -1). */
-static int load_coords(const char *path, int32_t np, char ***chrom_out,
-                       int32_t **pos_out, sesame_err_t *err)
-{
-    gzFile f = gzopen(path, "rb");
-    char *buf, *tab, *tab2;
-    size_t cap = 1 << 16;
-    char **chrom = NULL;
-    int32_t *pos = NULL, row = 0, r;
-
-    if (!f) return sesame__fail(err, SESAME_ERR_IO, "cannot open %s", path);
-    if (!(buf = (char *)malloc(cap))) { gzclose(f);
-        return sesame__fail(err, SESAME_ERR_NOMEM, "oom"); }
-    chrom = (char **)malloc((size_t)np * sizeof(char *));
-    pos = (int32_t *)malloc((size_t)np * sizeof(int32_t));
-    if (!chrom || !pos) { free(buf); free(chrom); free(pos); gzclose(f);
-        return sesame__fail(err, SESAME_ERR_NOMEM, "oom"); }
-
-    r = read_gzline(f, &buf, &cap);              /* header */
-    while ((r = read_gzline(f, &buf, &cap)) == 1) {
-        if (row >= np) { row++; continue; }      /* count overflow, report below */
-        tab = strchr(buf, '\t');
-        if (tab) *tab = '\0';
-        if (buf[0] == '\0' || !strcmp(buf, "*") || !strcmp(buf, "NA")) {
-            chrom[row] = strdup(""); pos[row] = -1;
-        } else {
-            chrom[row] = strdup(buf);
-            tab2 = tab ? strchr(tab + 1, '\t') : NULL;
-            if (tab2) *tab2 = '\0';
-            pos[row] = tab ? (int32_t)strtol(tab + 1, NULL, 10) : -1;
-        }
-        row++;
-    }
-    free(buf); gzclose(f);
-    if (r < 0 || row != np) {
-        for (int32_t i = 0; i < row && i < np; i++) free(chrom[i]);
-        free(chrom); free(pos);
-        if (r < 0) return sesame__fail(err, SESAME_ERR_NOMEM, "oom");
-        return sesame__fail(err, SESAME_ERR_FORMAT,
-            "%s has %d data rows, ordering has %d -- lineage mismatch", path, row, np);
-    }
-    *chrom_out = chrom; *pos_out = pos;
-    return SESAME_OK;
-}
+/* Per-probe coordinates live in describe.c (sesame__load_coords): cnv and
+ * describe-probe read the same table, so there is one parser for it. */
 
 /* seqinfo.tsv.gz (chrom<TAB>length) and gaps.tsv.gz (chrom<TAB>start<TAB>end).
  * Both keep chromosome order as written (seqinfo order drives the output). */
@@ -432,7 +389,7 @@ int sesame_cnv_run(const char *target_cg, const char *normals_cg,
         goto done;
     }
     if (nns < 1) { rc = sesame__fail(err, SESAME_ERR_FORMAT, "no normals in %s", normals_cg); goto done; }
-    if (load_coords(coords_path, np, &chrom, &pos, err) != SESAME_OK) goto done;
+    if (sesame__load_coords(coords_path, np, &chrom, &pos, err) != SESAME_OK) goto done;
     if (load_seqinfo(seqinfo_path, &seq, err) != SESAME_OK) goto done;
     if (load_gaps(gaps_path, &gap, err) != SESAME_OK) goto done;
 

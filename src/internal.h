@@ -99,3 +99,8 @@ const uint8_t  *sesame__index_col(const sesame_index_t *ix);
 const uint8_t  *sesame__index_mask(const sesame_index_t *ix);
 
 #endif /* SESAME_INTERNAL_H */
+
+/* The per-probe coordinate table (<platform>.<genome>.coord.tsv.gz), positional
+ * over the ordering. Lives in describe.c; cnv.c and describe-probe share it. */
+int sesame__load_coords(const char *path, int32_t np, char ***chrom_out,
+                        int32_t **pos_out, sesame_err_t *err);

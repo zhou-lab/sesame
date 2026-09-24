@@ -35,6 +35,9 @@ command -v "$RSCRIPT" >/dev/null 2>&1 || { echo "SKIP collapse: no Rscript"; exi
 PASS=0; FAIL=0
 run_one() {
     plat=$1; rel=$2
+    ## SESAME_ONLY: an ERE over "<platform> <prefix> ..."; cases that do not
+    ## match are skipped so a parallel gate can run one case per job.
+    if [ -n "${SESAME_ONLY:-}" ] && ! echo "$*" | grep -Eq "$SESAME_ONLY"; then return; fi
     ord="$store/$plat/$plat.ordering.tsv.gz"
     pfx="$idats/$rel"
     [ -f "$ord" ] || { echo "SKIP $plat collapse: no $ord"; return; }

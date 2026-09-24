@@ -1,4 +1,7 @@
-/* attach.c -- attach the ordering's Probe_IDs to a positional data file.
+/* describe.c -- say what a positional file's rows are, and where probes are.
+ *
+ * The two halves of `sesame describe-probe`: label a positional file with the
+ * ordering's Probe_IDs, and resolve probe IDs to genomic coordinates.
  *
  * A YAME .cg/.cm/.cx stores one value per probe in ordering order, with NO probe
  * id inside the container (row names live in the ordering, not the data). The
@@ -69,7 +72,7 @@ static int read_gzline(gzFile f, char **buf, size_t *cap)
 
 /* The ordering columns requested with --with, in the ordering's own column
  * order, so the output reads like the ordering it came from. */
-static void with_head(FILE *out, const sesame_attach_opt_t *opt)
+static void with_head(FILE *out, const sesame_describe_opt_t *opt)
 {
     if (opt->with & SESAME_WITH_M)    fputs("\tM", out);
     if (opt->with & SESAME_WITH_U)    fputs("\tU", out);
@@ -78,7 +81,7 @@ static void with_head(FILE *out, const sesame_attach_opt_t *opt)
 }
 
 static void with_row(FILE *out, const sesame_index_t *ix, int32_t i,
-                     const sesame_attach_opt_t *opt)
+                     const sesame_describe_opt_t *opt)
 {
     if (opt->with & SESAME_WITH_M) {
         uint32_t v = sesame__index_M(ix)[i];
@@ -119,8 +122,8 @@ static int count_text_rows(const char *path, int no_header, int32_t *nrow,
  * gzopen reads plain and gzipped text alike. The file's own header is kept and
  * prefixed with "Probe_ID"; each data line gets its positional Probe_ID. Row
  * count is checked up front so a lineage mismatch fails before any output. */
-static int attach_text(const char *path, const sesame_index_t *ix,
-                       const sesame_attach_opt_t *opt, FILE *out,
+static int describe_text(const char *path, const sesame_index_t *ix,
+                       const sesame_describe_opt_t *opt, FILE *out,
                        sesame_err_t *err)
 {
     gzFile f;
@@ -164,7 +167,7 @@ static int attach_text(const char *path, const sesame_index_t *ix,
 
 /* One value of decompressed record d at row i. Mirrors yame unpack. */
 static void render1(FILE *out, cdata_t *d, uint64_t i,
-                    const sesame_attach_opt_t *opt)
+                    const sesame_describe_opt_t *opt)
 {
     switch (d->fmt) {
     case '0':                              /* mask bit */
@@ -203,7 +206,7 @@ static void render1(FILE *out, cdata_t *d, uint64_t i,
 
 /* Header cell(s) for a sample under format fmt (fmt3 M/U is two columns). */
 static void render_head(FILE *out, char fmt, const char *name,
-                        const sesame_attach_opt_t *opt)
+                        const sesame_describe_opt_t *opt)
 {
     if (fmt == '3' && !opt->beta) fprintf(out, "%s_M\t%s_U", name, name);
     else                          fputs(name, out);
@@ -217,9 +220,9 @@ static void render_head(FILE *out, char fmt, const char *name,
  * Probe_ID is both shorter and honest about what the operation is: the
  * files already line up, row i is probe i in every one of them. The row
  * counts must agree, and a mismatch is the lineage error it always was. */
-static int attach_yame(const char *const *paths, int npath,
+static int describe_yame(const char *const *paths, int npath,
                        const sesame_index_t *ix,
-                       const sesame_attach_opt_t *opt, FILE *out,
+                       const sesame_describe_opt_t *opt, FILE *out,
                        sesame_err_t *err)
 {
     cfile_t cf;
@@ -311,19 +314,19 @@ done:
     return rc;
 }
 
-int sesame_attach_probe(const char *path, const sesame_index_t *ix,
-                        const sesame_attach_opt_t *opt, FILE *out,
+int sesame_describe_probe(const char *path, const sesame_index_t *ix,
+                        const sesame_describe_opt_t *opt, FILE *out,
                         sesame_err_t *err)
 {
-    return sesame_attach_probe_n(&path, 1, ix, opt, out, err);
+    return sesame_describe_probe_n(&path, 1, ix, opt, out, err);
 }
 
-int sesame_attach_probe_n(const char *const *paths, int npath,
+int sesame_describe_probe_n(const char *const *paths, int npath,
                           const sesame_index_t *ix,
-                          const sesame_attach_opt_t *opt, FILE *out,
+                          const sesame_describe_opt_t *opt, FILE *out,
                           sesame_err_t *err)
 {
-    static const sesame_attach_opt_t deflt = { 0, 0, 0, 0 };
+    static const sesame_describe_opt_t deflt = { 0, 0, 0, 0 };
     if (err) { err->code = SESAME_OK; err->msg[0] = '\0'; }
     if (!opt) opt = &deflt;
     if (npath < 1) return sesame__fail(err, SESAME_ERR_IO, "no input file");
@@ -331,7 +334,178 @@ int sesame_attach_probe_n(const char *const *paths, int npath,
         if (npath > 1)
             return sesame__fail(err, SESAME_ERR_UNSUPPORTED,
                 "several inputs are only supported for YAME files");
-        return attach_text(paths[0], ix, opt, out, err);
+        return describe_text(paths[0], ix, opt, out, err);
     }
-    return attach_yame(paths, npath, ix, opt, out, err);
+    return describe_yame(paths, npath, ix, opt, out, err);
+}
+
+/* Per-probe coordinates, positional in the ordering. chrom[i] is a strdup'd
+ * chromosome ("" if unmapped), pos[i] the 0-BASED start (or -1). Shared with
+ * cnv.c -- the table is the same file and a second parser would be a second
+ * place for the lineage check to drift. */
+int sesame__load_coords(const char *path, int32_t np, char ***chrom_out,
+                       int32_t **pos_out, sesame_err_t *err)
+{
+    gzFile f = gzopen(path, "rb");
+    char *buf, *tab, *tab2;
+    size_t cap = 1 << 16;
+    char **chrom = NULL;
+    int32_t *pos = NULL, row = 0, r;
+
+    if (!f) return sesame__fail(err, SESAME_ERR_IO, "cannot open %s", path);
+    if (!(buf = (char *)malloc(cap))) { gzclose(f);
+        return sesame__fail(err, SESAME_ERR_NOMEM, "oom"); }
+    chrom = (char **)malloc((size_t)np * sizeof(char *));
+    pos = (int32_t *)malloc((size_t)np * sizeof(int32_t));
+    if (!chrom || !pos) { free(buf); free(chrom); free(pos); gzclose(f);
+        return sesame__fail(err, SESAME_ERR_NOMEM, "oom"); }
+
+    r = read_gzline(f, &buf, &cap);              /* header */
+    while ((r = read_gzline(f, &buf, &cap)) == 1) {
+        if (row >= np) { row++; continue; }      /* count overflow, report below */
+        tab = strchr(buf, '\t');
+        if (tab) *tab = '\0';
+        if (buf[0] == '\0' || !strcmp(buf, "*") || !strcmp(buf, "NA")) {
+            chrom[row] = strdup(""); pos[row] = -1;
+        } else {
+            chrom[row] = strdup(buf);
+            tab2 = tab ? strchr(tab + 1, '\t') : NULL;
+            if (tab2) *tab2 = '\0';
+            pos[row] = tab ? (int32_t)strtol(tab + 1, NULL, 10) : -1;
+        }
+        row++;
+    }
+    free(buf); gzclose(f);
+    if (r < 0 || row != np) {
+        for (int32_t i = 0; i < row && i < np; i++) free(chrom[i]);
+        free(chrom); free(pos);
+        if (r < 0) return sesame__fail(err, SESAME_ERR_NOMEM, "oom");
+        return sesame__fail(err, SESAME_ERR_FORMAT,
+            "%s has %d data rows, ordering has %d -- lineage mismatch", path, row, np);
+    }
+    *chrom_out = chrom; *pos_out = pos;
+    return SESAME_OK;
+}
+
+/* --------------------------------------------------------------------------
+ * describe: probe ID -> genomic coordinate.
+ *
+ * The consumer is `yame rowsub -L`, which reads one <chrm>_<beg1> per line and
+ * cuts windows out of a genome-indexed store. So this prints exactly what that
+ * reads, in the caller's input order, and nothing else: no header, because the
+ * whole point is `cut -f2 | yame rowsub -L -`.
+ *
+ * The coordinate table is positional over the ordering and 0-based (it is a
+ * BED begin); rowsub addresses rows 1-based, so the +1 happens here, once,
+ * rather than in every caller's awk.
+ */
+
+/* Probe IDs sorted for lookup. The ID a user types is often the bare cg
+ * number, while EPICv2/MSA spell it cg########_<design>; a bare number must
+ * therefore match at the underscore, and match EVERY replicate. */
+typedef struct { const char *id; int32_t idx; } de_ent;
+
+static int de_cmp(const void *a, const void *b)
+{
+    const de_ent *x = (const de_ent *)a, *y = (const de_ent *)b;
+    int c = strcmp(x->id, y->id);
+    if (c) return c;
+    return (x->idx > y->idx) - (x->idx < y->idx);
+}
+
+/* Does probe `id` answer to `q`? Either the whole ID, or the part before the
+ * first '_' -- so cg00000029 finds cg00000029_TC21, and cg00000029_TC21 finds
+ * only itself. A prefix that stops mid-number (cg0000002) matches nothing. */
+static int de_match(const char *id, const char *q, size_t ql)
+{
+    if (strncmp(id, q, ql) != 0) return 0;
+    return id[ql] == '\0' || id[ql] == '_';
+}
+
+/* A contig we can address in a genome-indexed store: the primary assembly.
+ * An alt/random/fix contig is not in yame's cpg_nocontig.cr, so a window
+ * around it cannot be cut -- report it rather than emit a row that yame will
+ * reject. Primary names carry no underscore. */
+static int de_primary(const char *chrm)
+{
+    return chrm[0] && strchr(chrm, '_') == NULL;
+}
+
+int sesame_describe_coords(const char *ids_path, const sesame_index_t *ix,
+                           const char *coords_path, FILE *out,
+                           sesame_describe_stat_t *st, sesame_err_t *err)
+{
+    int32_t np = ix ? sesame_index_nprobes(ix) : 0, i;
+    de_ent *ent = NULL;
+    char **chrom = NULL;
+    int32_t *pos = NULL;
+    gzFile f = NULL;
+    char *buf = NULL;
+    size_t cap = 1 << 16;
+    int rc = SESAME_OK, r;
+
+    if (err) { err->code = SESAME_OK; err->msg[0] = '\0'; }
+    if (st) memset(st, 0, sizeof *st);
+    if (!ix || !coords_path || !out)
+        return sesame__fail(err, SESAME_ERR_IO, "null argument");
+    if (np <= 0) return sesame__fail(err, SESAME_ERR_FORMAT, "empty index");
+
+    if ((rc = sesame__load_coords(coords_path, np, &chrom, &pos, err)) != SESAME_OK)
+        return rc;
+
+    if (!(ent = (de_ent *)malloc((size_t)np * sizeof *ent))) {
+        rc = sesame__fail(err, SESAME_ERR_NOMEM, "oom"); goto done; }
+    for (i = 0; i < np; i++) { ent[i].id = sesame_index_probe_id(ix, i); ent[i].idx = i; }
+    qsort(ent, (size_t)np, sizeof *ent, de_cmp);
+
+    /* "-" is stdin: the ID list is usually the tail of another command. */
+    f = (!ids_path || !strcmp(ids_path, "-")) ? gzdopen(dup(0), "rb")
+                                              : gzopen(ids_path, "rb");
+    if (!f) { rc = sesame__fail(err, SESAME_ERR_IO, "cannot open %s",
+                                ids_path ? ids_path : "-"); goto done; }
+    if (!(buf = (char *)malloc(cap))) {
+        rc = sesame__fail(err, SESAME_ERR_NOMEM, "oom"); goto done; }
+
+    while ((r = read_gzline(f, &buf, &cap)) == 1) {
+        char *q = buf, *tab;
+        size_t ql;
+        int32_t lo = 0, hi = np;
+        int hit = 0;
+
+        while (*q == ' ' || *q == '\t') q++;
+        if ((tab = strpbrk(q, " \t\r"))) *tab = '\0';   /* first field only */
+        if (!*q || *q == '#') continue;                 /* blank / comment */
+        if (st) st->n_query++;
+        ql = strlen(q);
+
+        /* lower bound on the sorted IDs, then walk the run that matches */
+        while (lo < hi) {
+            int32_t mid = lo + ((hi - lo) >> 1);
+            if (strncmp(ent[mid].id, q, ql) < 0) lo = mid + 1; else hi = mid;
+        }
+        for (i = lo; i < np && de_match(ent[i].id, q, ql); i++) {
+            int32_t k = ent[i].idx;
+            hit = 1;
+            if (pos[k] < 0 || !chrom[k][0]) { if (st) st->n_unmapped++; continue; }
+            if (!de_primary(chrom[k]))      { if (st) st->n_altcontig++; continue; }
+            fprintf(out, "%s\t%s_%d\n", ent[i].id, chrom[k], pos[k] + 1);
+            if (st) st->n_out++;
+        }
+        /* An ID that is not on the platform is a mistake in the query, not a
+         * property of the data: the caller asked about a probe this array
+         * does not carry, and a silently shorter output would hide it. */
+        if (!hit) {
+            rc = sesame__fail(err, SESAME_ERR_FORMAT,
+                "%s is not a probe on this platform", q);
+            goto done;
+        }
+    }
+    if (r < 0) rc = sesame__fail(err, SESAME_ERR_NOMEM, "oom");
+
+done:
+    if (f) gzclose(f);
+    free(buf); free(ent);
+    if (chrom) { for (i = 0; i < np; i++) free(chrom[i]); free(chrom); }
+    free(pos);
+    return rc;
 }

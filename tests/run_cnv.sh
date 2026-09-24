@@ -1,7 +1,7 @@
 #!/bin/sh
 # cnv: validate the copy-number numeric core (target~normals OLS + log2 ratio)
 # against R's lm on IDENTICAL inputs, and sanity-check the genome binning. Feeds R
-# the same per-probe totals C uses (extracted from C's own .cg via attach-probe),
+# the same per-probe totals C uses (extracted from C's own .cg via describe-probe),
 # so this is a pure numeric check -- no data-lineage or channel ambiguity. Needs a
 # store with EPICv2 ordering+coord+cnvnormals, the hg38 genome, an EPICv2 IDAT, and
 # Rscript; skips cleanly otherwise.
@@ -48,9 +48,9 @@ export YAME_DATA_HOME="$yhome"
 "$bin" cnv          --platform $plat --genome hg38 "$work/total_intensity.cg" "$work/c_seg.tsv" "$work/c_bins.tsv"   2>/dev/null
 
 # extract C's own totals/normals/coords (Probe_ID-keyed) for the R oracle
-"$bin" attach-probe --index "$ord" "$work/total_intensity.cg" 2>/dev/null > "$work/tgt.tsv"
-"$bin" attach-probe --all --index "$ord" "$nrm" 2>/dev/null > "$work/norm.tsv"
-"$bin" attach-probe --index "$ord" "$crd" 2>/dev/null > "$work/coord.tsv"
+"$bin" describe-probe --index "$ord" "$work/total_intensity.cg" 2>/dev/null > "$work/tgt.tsv"
+"$bin" describe-probe --all --index "$ord" "$nrm" 2>/dev/null > "$work/norm.tsv"
+"$bin" describe-probe --index "$ord" "$crd" 2>/dev/null > "$work/coord.tsv"
 "$RSCRIPT" "$here/compare_cnv.R" "$work/tgt.tsv" "$work/norm.tsv" "$work/coord.tsv" "$work/r_probes.tsv" >/dev/null 2>&1
 
 python3 - "$work/c_probes.tsv" "$work/r_probes.tsv" "$work/c_bins.tsv" <<'PY'

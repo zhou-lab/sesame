@@ -51,7 +51,7 @@ def plain(path):
 ## live in a CODE BLOCK (a ``` fence, a <pre>, or an indented llms.txt line),
 ## because "sesame is entirely offline" is a sentence, not a command; and the
 ## flags counted are only those before the first pipe or redirect, because
-## `sesame attach-probe ... | tabl quantile --wider` ends in tabl's flags.
+## `sesame describe-probe ... | tabl quantile --wider` ends in tabl's flags.
 INVOKE = re.compile(r"^[ \t]*(?:\$ )?sesame ([a-z][a-z-]+)((?: [^\n]*)?)$", re.M)
 
 def code_blocks(path):

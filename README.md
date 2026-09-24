@@ -28,10 +28,8 @@ SeSAMe2 is the second implementation of
 R package as a permanent oracle.
 
 > **SeSAMe2 (2.x, this command line) and sesame (1.x, the R/Bioconductor
-> package) are parallel, not sequential.** Neither is an upgrade of the other —
-> one is an R package you `library()`, the other a binary you run in a shell.
-> Install the R package with `BiocManager::install("sesame")`, this one with
-> `conda install -c zhou-lab sesame`. The R package stays on the 1.x series.
+> package) are parallel, not sequential** — one method, two implementations.
+> R: `BiocManager::install("sesame")`; shell: `conda install -c zhou-lab sesame`.
 
 ## Install
 

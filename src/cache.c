@@ -97,6 +97,18 @@ const sesame_reg_t *sesame__reg_for_platform(const char *platform)
 
 /* The catalog tag this build expects for a genome build; "the pinned tag"
  * when the build is not one we carry. */
+/* Is this name a genome build the registry knows? The lift commands take one
+ * name for both sides, so the error has to say which kind of thing is missing:
+ * a genome has no ordering table, and telling a user to fetch hg38.ordering
+ * sends them looking for a file that does not exist. */
+int sesame_is_genome(const char *name)
+{
+    if (!name) return 0;
+    for (const sesame_genome_reg_t *g = SESAME_GENOMES; g->genome; g++)
+        if (strcmp(g->genome, name) == 0) return 1;
+    return 0;
+}
+
 static const char *sesame__genome_tag(const char *genome)
 {
     if (!genome) return "the pinned tag";
@@ -171,6 +183,20 @@ const char *sesame_store_dir(char *out, size_t n)
 int sesame_platform_is_path(const char *arg)
 {
     return arg && *arg && yame_assets_is_file(arg);
+}
+
+/* Did the user MEAN a path? A platform name is a bare word, so a directory
+ * component or an ordering's extension says the argument was meant as a file.
+ * Without this a mistyped path is taken for a platform name, and the error
+ * then offers to fetch it and prints <store>/<the whole path>/<platform>...,
+ * which sends the reader looking for the wrong mistake. */
+static int looks_like_path(const char *arg)
+{
+    const char *dot;
+    if (!arg || !*arg) return 0;
+    if (strchr(arg, '/')) return 1;
+    dot = strrchr(arg, '.');
+    return dot && (strcmp(dot, ".gz") == 0 || strcmp(dot, ".tsv") == 0);
 }
 
 /* <store>/<platform>/<file>, else ./<file>. 0 on success.
@@ -315,6 +341,16 @@ void sesame_index_missing_help(const char *platform, char *msg, size_t n)
 {
     const sesame_reg_t *reg = sesame__reg_for_platform(platform);
     char dir[4096];
+
+    if (looks_like_path(platform)) {
+        snprintf(msg, n,
+            "cannot open %s\n"
+            "  --platform takes a platform name (EPICv2) or a path to an\n"
+            "  ordering file; this reads as a path, and there is no such file",
+            platform);
+        return;
+    }
+
     sesame_store_dir(dir, sizeof dir);
     snprintf(msg, n,
         "no index found for platform %s\n"

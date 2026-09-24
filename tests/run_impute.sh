@@ -2,8 +2,8 @@
 # imputeBetasMatrixByMean: `impute --method mean` fills NA with a probe's mean
 # across samples (--axis probe, R axis=1) or a sample's mean across probes
 # (--axis sample, R axis=2). Compared to R's imputeBetasMatrixByMean on C's own
-# betas matrix (read back via attach-probe --all) -- exact up to float32 .cg
-# rounding. Needs a store with the ordering, yame's attach path, R, and >=2 IDATs.
+# betas matrix (read back via describe-probe --all) -- exact up to float32 .cg
+# rounding. Needs a store with the ordering, yame's describe path, R, and >=2 IDATs.
 #
 # (impute --method neighbors is NOT gated here: it needs R's empirically-mapped
 # manifest coordinates, which the store's design-coord table does not provide.)
@@ -41,13 +41,13 @@ done
 
 YAME_DATA_HOME="$yhome" "$bin" preprocess --platform $plat --output beta \
     --out "$work/pp" "$p1" "$p2" 2>/dev/null
-"$bin" attach-probe --all --index "$ord" "$work/pp/beta.cg" 2>/dev/null > "$work/in.tsv"
+"$bin" describe-probe --all --index "$ord" "$work/pp/beta.cg" 2>/dev/null > "$work/in.tsv"
 
 PASS=0; FAIL=0
 one_axis() {
     ax=$1; rax=$2
     "$bin" impute --method mean --axis "$ax" "$work/pp/beta.cg" "$work/out.cg" 2>/dev/null
-    "$bin" attach-probe --all --index "$ord" "$work/out.cg" 2>/dev/null > "$work/out.tsv"
+    "$bin" describe-probe --all --index "$ord" "$work/out.cg" 2>/dev/null > "$work/out.tsv"
     if "$RSCRIPT" --vanilla - "$work/in.tsv" "$work/out.tsv" "$rax" "$ax" <<'PY' 2>"$work/r.err"
 suppressMessages(library(sesame)); a<-commandArgs(TRUE)
 inp<-as.matrix(read.table(a[1],header=TRUE,sep="\t",row.names=1,check.names=FALSE))

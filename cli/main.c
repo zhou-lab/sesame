@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <pthread.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,7 +78,8 @@ static void print_build_info(FILE *out)
  * the reset lands right after the name rather than after a run of spaces. */
 static void cmd_row(const char *name, const char *desc)
 {
-    int pad = 13 - (int)strlen(name);
+    /* widest name + 2; describe-probe is the long one */
+    int pad = 16 - (int)strlen(name);
     if (pad < 1) pad = 1;
     fprintf(stderr, "    %s%s%s%*s%s\n", H_KEY, name, H_OFF, pad, "", desc);
 }
@@ -105,7 +107,7 @@ static int usage(void)
     cmd_row("impute",    "fill missing betas (matrix mean or genomic neighbours)");
 
     fprintf(stderr, "\n%sInspect / convert%s\n", H_TITLE, H_OFF);
-    cmd_row("attach-probe", "prepend Probe_IDs to a positional .cg / .tsv");
+    cmd_row("describe-probe", "probe IDs for a positional file, or their coordinates");
     cmd_row("idat-dump",    "dump raw IDAT records, or a summary header");
     cmd_row("deidentify",   "remove the genetic fingerprint (SNP probes)");
 
@@ -212,8 +214,8 @@ static int usage_cnv(void)
     yame_usage_opt("--probes", "write per-probe rows to the detail file, not per-bin");
     yame_usage_opt("--exclude LIST", "comma list of chromosomes to drop from both outputs");
     yame_usage_cont("(e.g. chrY for a female sample; unreliable on arrays)");
-    yame_usage_opt("--normals FILE", "normal panel .cg -- NOT shipped with the annotation;");
-    yame_usage_cont("build one with `make cnv-normals` or supply your own");
+    yame_usage_opt("--normals FILE", "normal panel .cg (default: the store's");
+    yame_usage_cont("<P>.cnvnormals.cg, shipped with the annotation v8.2+)");
     yame_usage_opt("--platform P", "EPIC | EPICv2 | HM450 | MSA; supplies the");
     yame_usage_cont("defaults. A path to an ordering file also works,");
     yame_usage_cont("for a custom array.");
@@ -224,8 +226,8 @@ static int usage_cnv(void)
     yame_usage_opt("--min-probes N", "drop bins with < N probes (default 20)");
 
     yame_usage_sec("Notes:");
-    yame_usage_text("coords/genome default to the store for --platform; the normal panel");
-    yame_usage_text("does not, since it is not published with the annotation.");
+    yame_usage_text("coords, genome and the normal panel all default to the store for");
+    yame_usage_text("--platform; `yame fetch` brings the panel with the annotation.");
     return 1;
 }
 
@@ -342,15 +344,31 @@ static int usage_impute(void)
     return 1;
 }
 
-static int usage_attach(void)
+static int usage_describe(void)
 {
-    yame_usage_head("sesame attach-probe [options] <file>");
+    yame_usage_head("sesame describe-probe [options] <file>");
     fputs("\n", stderr);
-    yame_usage_text("Prepend the ordering's Probe_ID to a positional file's rows, as TSV");
-    yame_usage_text("on stdout. <file> is a YAME .cg/.cm/.cx (fmt0 mask, fmt3 M/U or");
-    yame_usage_text("--beta, fmt4 float) or a text .tsv[.gz], e.g. a .hg38.coord.tsv.gz.");
+    yame_usage_text("Say what a positional file's rows are, or where probes are.");
+    fputs("\n", stderr);
+    yame_usage_text("Default: prepend the ordering's Probe_ID to a positional file's rows,");
+    yame_usage_text("as TSV on stdout. <file> is a YAME .cg/.cm/.cx (fmt0 mask, fmt3 M/U");
+    yame_usage_text("or --beta, fmt4 float) or a text .tsv[.gz], e.g. a .hg38.coord.tsv.gz.");
     yame_usage_text("The row count must match the ordering -- same platform and tag that");
     yame_usage_text("made the file.");
+    fputs("\n", stderr);
+    yame_usage_text("With --genome: <file> is instead a list of probe IDs (one per line,");
+    yame_usage_text("\"-\" for stdin) and the output is Probe_ID <TAB> <chrm>_<beg1>, in");
+    yame_usage_text("input order, no header. That second column is what `yame rowsub -L`");
+    yame_usage_text("reads, so the genomic neighbourhood of a probe set is:");
+    fputs("\n", stderr);
+    yame_usage_text("  sesame describe-probe --platform HM450 --genome hg38 probes.txt \\");
+    yame_usage_text("    | cut -f2 | yame rowsub -L - -w 15 -M map.tsv -1 wgbs.cg > win.cg");
+    fputs("\n", stderr);
+    yame_usage_text("A bare cg number matches every design suffix (EPICv2/MSA), so one");
+    yame_usage_text("query can yield several lines. An ID the platform does not carry is");
+    yame_usage_text("an error. Probes with no CpG in the genome, or on a contig a");
+    yame_usage_text("genome-indexed store cannot address, are dropped and counted on");
+    yame_usage_text("stderr.");
 
     yame_usage_sec("Options:");
     yame_usage_opt("--platform P", "EPIC | EPICv2 | HM450 | MSA. Omit it and the");
@@ -364,6 +382,10 @@ static int usage_attach(void)
     yame_usage_opt("--all, -a", "emit every sample column (default: first only)");
     yame_usage_opt("--beta", "read fmt3 M/U as beta");
     yame_usage_opt("--no-header", "omit the header row");
+    yame_usage_opt("--genome BUILD", "coordinate mode: read probe IDs, print");
+    yame_usage_cont("<chrm>_<beg1> per probe (e.g. hg38)");
+    yame_usage_opt("--coords FILE", "the coordinate table (default: the store's");
+    yame_usage_cont("<platform>.<genome>.coord.tsv.gz)");
     return 1;
 }
 
@@ -420,7 +442,8 @@ static int route_usage(const char *cmd)
     if (!strcmp(cmd, "mliftover"))    return usage_liftover();
     if (!strcmp(cmd, "impute"))       return usage_impute();
     if (!strcmp(cmd, "deidentify")) return usage_deidentify();
-    if (!strcmp(cmd, "attach-probe")) return usage_attach();
+    if (!strcmp(cmd, "describe-probe") ||
+        !strcmp(cmd, "attach-probe"))  return usage_describe();
     if (!strcmp(cmd, "idat-dump"))    return usage_idat();
     return usage();
 }
@@ -1385,9 +1408,8 @@ static int cmd_cnv(int argc, char **argv)
         idxpath = resolved;
     }
     if (!normals) {
-        /* The normal panel is NOT part of the InfiniumAnnotation release, so
-         * `yame fetch` does not supply it -- build one with `make cnv-normals`
-         * or point --normals at your own. */
+        /* The normal panel ships with the InfiniumAnnotation release (v8.2+),
+         * so the store has it after `yame fetch`; --normals overrides it. */
         char nfile[256];
         if (!platform) { fprintf(stderr, "sesame: cnv needs --normals or --platform\n"); return 1; }
         snprintf(nfile, sizeof nfile, "%s.cnvnormals.cg", platform);
@@ -1395,8 +1417,8 @@ static int cmd_cnv(int argc, char **argv)
             fprintf(stderr,
                 "sesame: no normal panel for %s\n"
                 "  searched: %s/%s/%s\n"
-                "  the panel is not published with the annotation -- pass\n"
-                "  --normals <file>, or build one with `make cnv-normals`\n",
+                "  it ships with the annotation (v8.2+): run `yame fetch`, or pass\n"
+                "  --normals <file> (one can be built with `make cnv-normals`)\n",
                 platform, store, platform, nfile);
             return 1;
         }
@@ -1731,6 +1753,10 @@ static int cmd_liftover(int argc, char **argv)
         /* probe-ID prefix join between two array orderings */
         if (!src_idx) {
             if (!src_plat) { fprintf(stderr, "sesame: mliftover needs --platform or --index for the source\n"); return 1; }
+            if (sesame_is_genome(src_plat)) {
+                sesame_genome_missing_help(src_plat, help, sizeof help);
+                fprintf(stderr, "sesame: %s\n", help); return 1;
+            }
             if (sesame_index_locate(src_plat, sres, sizeof sres) != 0) {
                 sesame_index_missing_help(src_plat, help, sizeof help);
                 fprintf(stderr, "sesame: %s\n", help); return 1;
@@ -1739,6 +1765,13 @@ static int cmd_liftover(int argc, char **argv)
         } else if (!src_plat) src_plat = platform_from_basename(src_idx);
         if (!src_plat) { fprintf(stderr, "sesame: mliftover needs --platform for the source (sets the join direction)\n"); return 1; }
         if (!tgt_idx) {
+            /* --to hg38 lands here when the store lacks hg38/cpg_nocontig.cr:
+             * the genome was not recognised as one, so say that, not that its
+             * ordering table is missing. */
+            if (sesame_is_genome(tgt_plat)) {
+                sesame_genome_missing_help(tgt_plat, help, sizeof help);
+                fprintf(stderr, "sesame: %s\n", help); return 1;
+            }
             if (sesame_index_locate(tgt_plat, tres, sizeof tres) != 0) {
                 sesame_index_missing_help(tgt_plat, help, sizeof help);
                 fprintf(stderr, "sesame: %s\n", help); return 1;
@@ -1853,13 +1886,14 @@ static const char *platform_from_basename(const char *path)
     return NULL;
 }
 
-static int cmd_attach_probe(int argc, char **argv)
+static int cmd_describe_probe(int argc, char **argv)
 {
     const char *paths[64], *idxpath = NULL, *platform = NULL;
+    const char *genome = NULL, *coords = NULL;
     int npath = 0;
     const char *path;
-    sesame_attach_opt_t opt; memset(&opt, 0, sizeof opt);
-    char resolved[4096];
+    sesame_describe_opt_t opt; memset(&opt, 0, sizeof opt);
+    char resolved[4096], cobuf[4096], help[1024], cfile[256];
     sesame_index_t *ix = NULL;
     sesame_err_t e;
     int i, rc = 1;
@@ -1887,16 +1921,18 @@ static int cmd_attach_probe(int argc, char **argv)
                 }
             }
         }
+        else if (strcmp(argv[i], "--genome") == 0 && i+1 < argc) genome = argv[++i];
+        else if (strcmp(argv[i], "--coords") == 0 && i+1 < argc) coords = argv[++i];
         else if (strcmp(argv[i], "--all") == 0 || strcmp(argv[i], "-a") == 0) opt.all = 1;
         else if (strcmp(argv[i], "--beta") == 0) opt.beta = 1;
         else if (strcmp(argv[i], "--no-header") == 0) opt.no_header = 1;
-        else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) { usage_attach(); return 0; }
+        else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) { usage_describe(); return 0; }
         else if (argv[i][0] == '-' && argv[i][1] != '\0') {
-            fprintf(stderr, "sesame: unknown option %s\n", argv[i]); return usage_attach();
+            fprintf(stderr, "sesame: unknown option %s\n", argv[i]); return usage_describe();
         } else if (npath < (int)(sizeof paths / sizeof *paths)) paths[npath++] = argv[i];
         else { fprintf(stderr, "sesame: too many input files\n"); return 1; }
     }
-    if (!npath) return usage_attach();
+    if (!npath) return usage_describe();
 
     /* --platform may name an ordering file instead of a platform (YAME's -R
      * rule). Then it IS the index, and there are no companion assets to look
@@ -1906,6 +1942,55 @@ static int cmd_attach_probe(int argc, char **argv)
         platform = NULL;
     }
     path = paths[0];                    /* the one we identify the ordering by */
+
+    /* Coordinate mode. <file> is a list of probe IDs, so nothing about the
+     * ordering can be read off it -- no filename lineage, no row count. The
+     * platform has to be named. */
+    if (genome) {
+        sesame_describe_stat_t st;
+        if (!idxpath && !platform) {
+            fprintf(stderr, "sesame: --genome needs --platform (the ID list "
+                            "does not say which array it came from)\n");
+            return 1;
+        }
+        if (!idxpath) {
+            if (sesame_index_locate(platform, resolved, sizeof resolved) != 0) {
+                sesame_index_missing_help(platform, help, sizeof help);
+                fprintf(stderr, "sesame: %s\n", help); return 1;
+            }
+            idxpath = resolved;
+        }
+        if (!coords) {
+            if (!platform) {
+                fprintf(stderr, "sesame: --genome with a custom ordering needs "
+                                "--coords (the store has no table for it)\n");
+                return 1;
+            }
+            snprintf(cfile, sizeof cfile, "%s.%s.coord.tsv.gz", platform, genome);
+            if (sesame_asset_locate(platform, cfile, cobuf, sizeof cobuf) != 0) {
+                sesame_asset_missing_help(platform, cfile, help, sizeof help);
+                fprintf(stderr, "sesame: %s\n", help); return 1;
+            }
+            coords = cobuf;
+        }
+        if (!(ix = sesame_index_open(idxpath, &e))) {
+            fprintf(stderr, "sesame: %s\n", e.msg); return 1;
+        }
+        if (sesame_describe_coords(path, ix, coords, stdout, &st, &e) != SESAME_OK) {
+            fprintf(stderr, "sesame: %s\n", e.msg); goto out;
+        }
+        fprintf(stderr, "sesame: describe-probe %s/%s -- %" PRId64 " quer%s, "
+                "%" PRId64 " coordinate%s", platform ? platform : idxpath, genome,
+                st.n_query, st.n_query == 1 ? "y" : "ies",
+                st.n_out, st.n_out == 1 ? "" : "s");
+        if (st.n_unmapped)  fprintf(stderr, ", %" PRId64 " with no CpG in %s",
+                                    st.n_unmapped, genome);
+        if (st.n_altcontig) fprintf(stderr, ", %" PRId64 " on a non-primary contig",
+                                    st.n_altcontig);
+        fputc('\n', stderr);
+        rc = 0;
+        goto out;
+    }
 
     /* Probe IDs come from the ordering: --index wins, else --platform, else the
      * filename prefix (e.g. MSA.hg38.coord.tsv.gz), else the file's own row
@@ -1950,7 +2035,7 @@ static int cmd_attach_probe(int argc, char **argv)
     if (!(ix = sesame_index_open(idxpath, &e))) {
         fprintf(stderr, "sesame: %s\n", e.msg); return 1;
     }
-    if (sesame_attach_probe_n(paths, npath, ix, &opt, stdout, &e) != SESAME_OK) {
+    if (sesame_describe_probe_n(paths, npath, ix, &opt, stdout, &e) != SESAME_OK) {
         fprintf(stderr, "sesame: %s\n", e.msg); goto out;
     }
     rc = 0;
@@ -2124,8 +2209,16 @@ int main(int argc, char **argv)
         return cmd_liftover(argc - 2, argv + 2);
     if (strcmp(argv[1], "impute") == 0)
         return cmd_impute(argc - 2, argv + 2);
-    if (strcmp(argv[1], "attach-probe") == 0)
-        return cmd_attach_probe(argc - 2, argv + 2);
+    if (strcmp(argv[1], "describe-probe") == 0)
+        return cmd_describe_probe(argc - 2, argv + 2);
+    /* Hidden alias, kept because scripts have it. Warns rather than silently
+     * working: a name that still runs but is not in the banner is a name
+     * nobody will stop typing unless told. */
+    if (strcmp(argv[1], "attach-probe") == 0) {
+        fprintf(stderr, "sesame: attach-probe is now describe-probe; "
+                        "the old name still works\n");
+        return cmd_describe_probe(argc - 2, argv + 2);
+    }
     if (strcmp(argv[1], "version") == 0 || strcmp(argv[1], "--version") == 0) {
         printf("sesame %s\n", SESAME_VERSION);
         print_build_info(stdout);

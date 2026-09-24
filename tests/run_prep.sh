@@ -31,6 +31,9 @@ pass=0
 # platform <space> prefix <space> prep-code
 while IFS=' ' read -r plat rel code; do
     [ -n "$plat" ] || continue
+    ## SESAME_ONLY: an ERE over "<platform> <prefix> ..."; cases that do not
+    ## match are skipped so a parallel gate can run one case per job.
+    if [ -n "${SESAME_ONLY:-}" ] && ! echo "$plat $rel $code" | grep -Eq "$SESAME_ONLY"; then continue; fi
     idx="$root/testdata/$plat.ordering.tsv.gz"
     pfx="$idats/$rel"
     [ -f "$idx" ] || { echo "SKIP $plat: no $idx (run: make index)"; continue; }

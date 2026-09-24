@@ -45,9 +45,12 @@ requirements:
     # tags compiled into src/registry.h. From v1.50 the fetch address is the
     # store path (`yame fetch -y EPICv2`), which is what our error messages
     # print; the older `InfiniumAnnotation/EPICv2` spelling stops resolving in
-    # v1.52, so the floor is not cosmetic. v1.54 is the release this build is
-    # pinned to and whose catalog src/registry.h projects.
-    - yame >=1.54
+    # v1.52, so the floor is not cosmetic. v1.57 is the release this build is
+    # pinned to and whose catalog src/registry.h projects; v1.55 is the first
+    # whose registry carries the CNV normal panels that `cnv` reads, and v1.57
+    # the first with `rowsub -w/-M`, which the describe-probe --genome pipeline
+    # in our own docs pipes into.
+    - yame >=1.57
 
 test:
   commands:

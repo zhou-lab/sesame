@@ -276,9 +276,9 @@ int sesame_rowmap_coords(const char *coords_path, const sesame_index_t *ix,
     pairs = (lo_pair *)malloc((size_t)nprobe * sizeof *pairs);
     if (!m || !pairs) { free_cdata(&cr); rc = sesame__fail(err, SESAME_ERR_NOMEM, "oom"); goto out; }
     /* cr.n on a format-7 record is its payload length, not its row count;
-     * fmt7_data_length() walks the rows. This is the universe size every
+     * fmt7_rows() walks the rows. This is the universe size every
      * genome-indexed file must have -- 29,401,795 for hg38's cpg_nocontig. */
-    m->nsrc = nprobe; m->ntgt = (int64_t)fmt7_data_length(&cr);
+    m->nsrc = nprobe; m->ntgt = (int64_t)fmt7_rows(&cr);
 
     fdr = init_finder(&cr);
     for (i = 0; i < nprobe; i++) {

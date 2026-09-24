@@ -39,8 +39,6 @@ typedef struct {
     char msg[256];
 } sesame_err_t;
 
-const char *sesame_strerror(int code);
-
 /* ---------------------------------------------------------------- IDAT ---
  *
  * Illumina IDAT v3 (non-encrypted). Only the four numeric sections are read
@@ -141,6 +139,10 @@ int sesame_genome_locate(const char *genome, const char *file,
 void sesame_index_missing_help(const char *platform, char *msg, size_t n);
 void sesame_asset_missing_help(const char *platform, const char *file,
                                char *msg, size_t n);
+/* 1 when the name is a genome build in the registry (hg38, mm10, ...), which
+ * decides whether a missing-asset error talks about an ordering or a genome. */
+int sesame_is_genome(const char *name);
+
 void sesame_genome_missing_help(const char *genome, char *msg, size_t n);
 
 sesame_index_t *sesame_index_open(const char *path, sesame_err_t *err);
@@ -148,7 +150,7 @@ void            sesame_index_close(sesame_index_t *ix);
 int32_t         sesame_index_nprobes(const sesame_index_t *ix);
 const char     *sesame_index_probe_id(const sesame_index_t *ix, int32_t i);
 
-/* ------------------------------------------------------------- attach ---
+/* ----------------------------------------------------------- describe ---
  *
  * Attach the ordering's Probe_IDs to a positional data file, writing a labeled
  * TSV to `out`. The file's rows are positionally aligned to the ordering (the
@@ -157,7 +159,7 @@ const char     *sesame_index_probe_id(const sesame_index_t *ix, int32_t i);
  * format: fmt0 mask bit, fmt3 M/U or beta, fmt4 float, ...) and plain text
  * .tsv[.gz] (e.g. <platform>.hg38.coord.tsv.gz), whose own header is kept and
  * prefixed with "Probe_ID". Errors if the row count does not match ix. */
-/* Ordering columns attach-probe can emit beside the Probe_ID. The ordering is
+/* Ordering columns describe-probe can emit beside the Probe_ID. The ordering is
  * already open to supply the IDs; these let a caller have the rest of the row
  * without re-reading the file and joining it back on. */
 #define SESAME_WITH_M     (1u << 0)   /* methylated bead address (NA -> "NA") */
@@ -170,18 +172,37 @@ typedef struct {
     int beta;       /* format 3: print beta instead of M<TAB>U                 */
     int no_header;  /* suppress the header line (text: treat line 1 as data)   */
     unsigned with;  /* SESAME_WITH_* bits, emitted right after Probe_ID        */
-} sesame_attach_opt_t;
+} sesame_describe_opt_t;
 
-int sesame_attach_probe(const char *path, const sesame_index_t *ix,
-                        const sesame_attach_opt_t *opt, FILE *out,
+int sesame_describe_probe(const char *path, const sesame_index_t *ix,
+                        const sesame_describe_opt_t *opt, FILE *out,
                         sesame_err_t *err);
 
 /* Several YAME files side by side. They are positional to the same ordering,
  * so this is a column concatenation, not a join -- row i is probe i in every
  * one of them. Row counts must agree. Text input takes a single file only. */
-int sesame_attach_probe_n(const char *const *paths, int npath,
+/* describe-probe's coordinate mode: probe IDs in, "<Probe_ID>\t<chrm>_<beg1>"
+ * out, in input order, one line per resolved probe (replicates give several).
+ * The coordinate is 1-based, which is what `yame rowsub -L` reads.
+ *
+ * A bare cg number matches every design suffix (EPICv2/MSA); an ID the
+ * platform does not carry is an error, since it is a mistake in the query. A
+ * probe with no CpG in this genome, or one on a non-primary contig that a
+ * genome-indexed store cannot address, is dropped and counted. */
+typedef struct {
+    int64_t n_query;      /* IDs read */
+    int64_t n_out;        /* lines written */
+    int64_t n_unmapped;   /* resolved, but no coordinate in this genome */
+    int64_t n_altcontig;  /* resolved to an alt/random/fix contig */
+} sesame_describe_stat_t;
+
+int sesame_describe_coords(const char *ids_path, const sesame_index_t *ix,
+                           const char *coords_path, FILE *out,
+                           sesame_describe_stat_t *st, sesame_err_t *err);
+
+int sesame_describe_probe_n(const char *const *paths, int npath,
                           const sesame_index_t *ix,
-                          const sesame_attach_opt_t *opt, FILE *out,
+                          const sesame_describe_opt_t *opt, FILE *out,
                           sesame_err_t *err);
 
 /* --------------------------------------------------------------- sigdf ---

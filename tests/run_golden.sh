@@ -33,20 +33,35 @@ command -v "$RSCRIPT" >/dev/null 2>&1 || { echo "SKIP golden: no $RSCRIPT"; exit
 fail=0
 pass=0
 
+## One R launch per corpus. R with sesame loaded starts in ~15 s, and the
+## per-file form paid that 33 times (595 s for the target); dumping every file
+## of a corpus from one R process brings it to one start-up per corpus.
+## Arguments: a file listing the IDATs, one per line; writes $work/r/<n>.tsv
+## in list order (n = 1-based line number).
+oracle_dump() {
+    rm -rf "$work/r"; mkdir -p "$work/r"
+    "$RSCRIPT" --vanilla -e '
+        suppressMessages(library(sesame))
+        a <- commandArgs(trailingOnly=TRUE)
+        files <- readLines(a[1]); outdir <- a[2]
+        for (i in seq_along(files)) {
+            r <- suppressWarnings(sesame:::readIDAT(files[i]))
+            q <- r$Quants
+            writeLines(sprintf("%s\t%d\t%d\t%d",
+                rownames(q), q[,"Mean"], q[,"SD"], q[,"NBeads"]),
+                file.path(outdir, paste0(i, ".tsv")))
+        }
+    ' "$1" "$work/r" 2>"$work/r.err"
+}
+
+## compare one file: $1 = IDAT path, $2 = label, $3 = its R dump
 check_one() {
     f=$1
     label=$2
+    rtsv=$3
 
-    # R oracle: dump addr/mean/sd/nbeads in file order, no header.
-    if ! "$RSCRIPT" --vanilla -e '
-        suppressMessages(library(sesame))
-        f <- commandArgs(trailingOnly=TRUE)[1]
-        r <- suppressWarnings(sesame:::readIDAT(f))
-        q <- r$Quants
-        cat(sprintf("%s\t%d\t%d\t%d",
-            rownames(q), q[,"Mean"], q[,"SD"], q[,"NBeads"]), sep="\n")
-    ' "$f" > "$work/r.tsv" 2>"$work/r.err"; then
-        echo "FAIL $label: R oracle errored"
+    if [ ! -s "$rtsv" ]; then
+        echo "FAIL $label: R oracle produced nothing"
         sed 's/^/    /' "$work/r.err" | head -3
         fail=$((fail+1)); return
     fi
@@ -57,24 +72,33 @@ check_one() {
         fail=$((fail+1)); return
     fi
 
-    if cmp -s "$work/r.tsv" "$work/c.tsv"; then
+    if cmp -s "$rtsv" "$work/c.tsv"; then
         n=$(wc -l < "$work/c.tsv" | tr -d ' ')
         printf 'ok   %-52s %8s records\n' "$label" "$n"
         pass=$((pass+1))
     else
         echo "FAIL $label: C and R differ"
-        diff "$work/r.tsv" "$work/c.tsv" | head -6 | sed 's/^/    /'
+        diff "$rtsv" "$work/c.tsv" | head -6 | sed 's/^/    /'
         fail=$((fail+1))
     fi
+}
+
+## run a corpus: $1 = file list, $2 = prefix to strip from labels ("" = basename)
+check_corpus() {
+    oracle_dump "$1" || { echo "FAIL: R oracle errored"; sed 's/^/    /' "$work/r.err" | head -3; fail=$((fail+1)); return; }
+    i=0
+    while IFS= read -r f; do
+        i=$((i+1))
+        if [ -n "$2" ]; then label=${f#"$2"/}; else label=$(basename "$f"); fi
+        check_one "$f" "$label" "$work/r/$i.tsv"
+    done < "$1"
 }
 
 echo "== corpus 1: sesameData extdata =="
 extdata=$("$RSCRIPT" -e 'cat(system.file("extdata","",package="sesameData"))' 2>/dev/null || true)
 if [ -n "${extdata:-}" ] && [ -d "$extdata" ]; then
-    for f in "$extdata"/*.idat; do
-        [ -e "$f" ] || continue
-        check_one "$f" "$(basename "$f")"
-    done
+    ls "$extdata"/*.idat 2>/dev/null > "$work/list1" || true
+    check_corpus "$work/list1" ""
 else
     echo "SKIP: sesameData not installed"
 fi
@@ -87,9 +111,7 @@ if [ -d "$idats" ]; then
     # in this shell rather than a forked subshell.
     find "$idats" \( -iname '*.idat' -o -iname '*.idat.gz' \) 2>/dev/null \
       | grep -v '/\.git/' | sort > "$work/list"
-    while IFS= read -r f; do
-        check_one "$f" "${f#"$idats"/}"
-    done < "$work/list"
+    check_corpus "$work/list" "$idats"
 else
     echo "SKIP: $idats not found (set SESAME_TEST_IDATS)"
 fi

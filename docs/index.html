@@ -120,8 +120,6 @@
      bottom of the page). */
   .grid{column-count:1;column-gap:16px}
   @media(min-width:640px){.grid{column-count:2}}
-  @media(min-width:980px){.grid{column-count:3}}
-  @media(min-width:1440px){.grid{column-count:4}}
   .grid.balanced{column-count:initial;display:flex;align-items:flex-start;gap:16px}
   .grid.balanced>.gcol{flex:1 1 0;min-width:0}
   .card{break-inside:avoid;margin:0 0 16px;border:1px solid var(--line);border-radius:13px;background:var(--card);
@@ -206,7 +204,7 @@
   <div class="titlerow">
     <h1><b>SE</b>nsible <b>S</b>tep-wise <b>A</b>nalysis of DNA <b>ME</b>thylation</h1>
     <a class="badge badge-ver" id="ver" href="https://github.com/zhou-lab/sesame/tags">latest</a>
-    <span class="badge">SeSAMe2 · cli</span>
+    <span class="badge">sesame2</span>
     <button id="agent-btn" type="button"
             data-cmd="Use sesame (SeSAMe2, the C command line) for Infinium DNA methylation analysis: IDAT to betas, QC, DML, CNV, SNP genotyping. Read https://zhou-lab.github.io/sesame/llms.txt first for installation, the shared asset store filled by yame fetch, commands, the prep codes, custom-array orderings, traps, and development guidance."
             title="Copy a prompt for your coding agent"
@@ -231,13 +229,9 @@
   <p class="expand">Infinium analysis made simpler — the same betas as the R
     package, ~20&times; faster.</p>
   <p class="parallel"><b>SeSAMe2 (2.x, this command line) and sesame (1.x, the
-    R/Bioconductor package) are parallel, not sequential.</b> Neither is an
-    upgrade of the other — one is an R package you <code>library()</code>, the
-    other a binary you run in a shell. They are one project and one method,
-    installed from different places:
-    <code>BiocManager::install("sesame")</code> for the R package,
-    <code>conda install -c zhou-lab sesame</code> for this one. The R package
-    stays on the 1.x series.</p>
+    R/Bioconductor package) are parallel, not sequential</b> — one method, two
+    implementations. R: <code>BiocManager::install("sesame")</code>; shell:
+    <code>conda install -c zhou-lab sesame</code>.</p>
   <p class="links">
     <a href="https://github.com/zhou-lab/sesame">GitHub</a><span>·</span>
     <a href="https://bioconductor.org/packages/sesame">R / Bioconductor</a><span>·</span>
@@ -341,20 +335,23 @@ yame unpack beta.cg | cinderplot --no-header \
   </section>
 
   <section class="card">
-    <h2>Read a .cg back <span class="m">— attach-probe</span></h2>
+    <h2>Read a .cg back <span class="m">— describe-probe</span></h2>
     <p>Betas and signals are stored <b>positionally</b> — one value per probe, in a fixed
       order, with <b>no Probe IDs inside</b>. The IDs live once in the platform's
       <b>ordering table</b>, which is what keeps the files small and byte-for-byte
       alignable: stack N samples into a matrix by column with no key-matching.
-      <code class="inl">attach-probe</code> joins the two back into a labelled TSV.</p>
-    <pre><code>$ sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> out/beta.cg
+      <code class="inl">describe-probe</code> joins the two back into a labelled TSV.</p>
+    <pre><code>$ sesame <a class="sub" href="#ref-describe-probe">describe-probe</a> out/beta.cg
 Probe_ID          206909630040_R03C01
 cg00000029_TC21   0.9124
 cg00000769_BC11   0.0331
 <span class="cm"># the ordering is inferred from the row count -- each</span>
 <span class="cm"># platform's is a distinct length. Name it if you'd rather:</span>
-$ sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> --platform EPICv2 out/beta.cg
-<span class="cm"># --all for every sample column (matrix)</span></code></pre>
+$ sesame <a class="sub" href="#ref-describe-probe">describe-probe</a> --platform EPICv2 out/beta.cg
+<span class="cm"># --all for every sample column (matrix)</span>
+<span class="cm"># the other direction: probe IDs -> coordinates, for yame rowsub -L</span>
+$ sesame <a class="sub" href="#ref-describe-probe">describe-probe</a> --platform HM450 --genome hg38 probes.txt
+cg00000029        chr16_53434200</code></pre>
   </section>
 
   <section class="card">
@@ -372,7 +369,7 @@ $ sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> --platform EPI
     <p>The two diagnostics from sesame's
       <a href="https://zhou-lab.github.io/sesame-docs/dev/supplemental.html">supplemental QC</a>,
       with no R in the loop: <code class="inl">preprocess</code> writes the signals,
-      <code class="inl">attach-probe</code> labels them,
+      <code class="inl">describe-probe</code> labels them,
       <a href="https://zhou-lab.github.io/tabl/">tabl</a> reshapes them, and
       <a href="https://zhou-lab.github.io/cinderplot/">cinderplot</a> draws them.</p>
     <figure>
@@ -383,7 +380,7 @@ $ sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> --platform EPI
 
 <span class="cm"># --with col carries the ordering's channel through; then pool each</span>
 <span class="cm"># channel's in-band {M,U} and read off a matched quantile grid</span>
-sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> --with col qc/intensity.cg \
+sesame <a class="sub" href="#ref-describe-probe">describe-probe</a> --with col qc/intensity.cg \
 | <b>tabl</b> filter 'col=="R" || col=="G"' \
 | <b>tabl</b> longer -c 3:4 -v sig \
 | <b>tabl</b> quantile -g col -n 51 sig --wider &gt; qq.tsv
@@ -402,9 +399,9 @@ cinderplot 'qq.tsv + aes(R, G) + geom_point(size=1.2)
         <button class="zoom" type="button" data-full="figures/qc_intens_beta.png" title="expand">⤢</button>
         <div class="code"><pre><code>sesame <a class="sub" href="#ref-preprocess">preprocess</a> --prep C --output intensity,beta --out qc/ $PFX
 
-<span class="cm"># both .cg are positional to the same ordering, so attach-probe puts</span>
+<span class="cm"># both .cg are positional to the same ordering, so describe-probe puts</span>
 <span class="cm"># them side by side -- no join. Then bin onto a 180x140 grid.</span>
-sesame <a class="sub" href="#ref-attach-probe">attach-probe</a> qc/intensity.cg qc/beta.cg \
+sesame <a class="sub" href="#ref-describe-probe">describe-probe</a> qc/intensity.cg qc/beta.cg \
 | <b>tabl</b> rename M=2 U=3 beta=4 \
 | <b>tabl</b> mutate 'logint=log2(M+U)' \
 | <b>tabl</b> bin2d -x logint -y beta -nx 180 -ny 140 --xlim 5,15 --ylim 0,1 \
@@ -454,13 +451,12 @@ sesame <a class="sub" href="#ref-deidentify">deidentify</a> -r --seed 42 s_noid.
     <pre><code>sesame <a class="sub" href="#ref-preprocess">preprocess</a> --prep "" --raw-signal \
   --output total_intensity --out t/ tumor
 sesame <a class="sub" href="#ref-cnv">cnv</a> --platform EPICv2 \
-  --normals EPICv2.cnvnormals.cg \
   t/total_intensity.cg segments.tsv bins.tsv
 <span class="cm"># --probes: per-probe; --exclude chrY</span></code></pre>
-    <p style="margin-top:11px"><b><code class="inl">--normals</code> is yours to
-      supply.</b> The normal panel is not published with the annotation, so no
-      fetch brings it: build one with <code class="inl">make cnv-normals</code>
-      or point the flag at your own.</p>
+    <p style="margin-top:11px">The normal panel ships with the annotation
+      (<code class="inl">&lt;P&gt;.cnvnormals.cg</code>, v8.2+), so
+      <code class="inl">yame fetch</code> brings it; <code class="inl">--normals</code>
+      points at your own instead.</p>
     <figure>
       <div class="shot" tabindex="0">
         <img src="figures/cnv_k562.png" alt="K562 copy-number profile from sesame <a class="sub" href="#ref-cnv">cnv</a>">
@@ -795,8 +791,8 @@ Options:
   --probes          write per-probe rows to the detail file, not per-bin
   --exclude LIST    comma list of chromosomes to drop from both outputs
                     (e.g. chrY for a female sample; unreliable on arrays)
-  --normals FILE    normal panel .cg -- NOT shipped with the annotation;
-                    build one with `make cnv-normals` or supply your own
+  --normals FILE    normal panel .cg (default: the store's
+                    &lt;P&gt;.cnvnormals.cg, shipped with the annotation v8.2+)
   --platform P      EPIC | EPICv2 | HM450 | MSA; supplies the
                     defaults. A path to an ordering file also works,
                     for a custom array.
@@ -807,8 +803,8 @@ Options:
   --min-probes N    drop bins with &lt; N probes (default 20)
 
 Notes:
-  coords/genome default to the store for --platform; the normal panel
-  does not, since it is not published with the annotation.</code></pre>
+  coords, genome and the normal panel all default to the store for
+  --platform; `yame fetch` brings the panel with the annotation.</code></pre>
   </details>
   <details class="ref" id="ref-vcf">
     <summary><code class="inl">sesame vcf</code> <span class="m">— genotype the SNP probes into a VCF (formatVCF)</span></summary>
@@ -926,17 +922,33 @@ Usage:
 </section>
 <section class="card">
   <h2>Inspect / convert</h2>
-  <details class="ref" id="ref-attach-probe">
-    <summary><code class="inl">sesame attach-probe</code> <span class="m">— prepend Probe_IDs to a positional .cg / .tsv</span></summary>
+  <details class="ref" id="ref-describe-probe">
+    <summary><code class="inl">sesame describe-probe</code> <span class="m">— probe IDs for a positional file, or their coordinates</span></summary>
     <pre class="help"><code>
 Usage:
-  sesame attach-probe [options] &lt;file&gt;
+  sesame describe-probe [options] &lt;file&gt;
 
-  Prepend the ordering's Probe_ID to a positional file's rows, as TSV
-  on stdout. &lt;file&gt; is a YAME .cg/.cm/.cx (fmt0 mask, fmt3 M/U or
-  --beta, fmt4 float) or a text .tsv[.gz], e.g. a .hg38.coord.tsv.gz.
+  Say what a positional file's rows are, or where probes are.
+
+  Default: prepend the ordering's Probe_ID to a positional file's rows,
+  as TSV on stdout. &lt;file&gt; is a YAME .cg/.cm/.cx (fmt0 mask, fmt3 M/U
+  or --beta, fmt4 float) or a text .tsv[.gz], e.g. a .hg38.coord.tsv.gz.
   The row count must match the ordering -- same platform and tag that
   made the file.
+
+  With --genome: &lt;file&gt; is instead a list of probe IDs (one per line,
+  "-" for stdin) and the output is Probe_ID &lt;TAB&gt; &lt;chrm&gt;_&lt;beg1&gt;, in
+  input order, no header. That second column is what `yame rowsub -L`
+  reads, so the genomic neighbourhood of a probe set is:
+
+    sesame describe-probe --platform HM450 --genome hg38 probes.txt \
+      | cut -f2 | yame rowsub -L - -w 15 -M map.tsv -1 wgbs.cg &gt; win.cg
+
+  A bare cg number matches every design suffix (EPICv2/MSA), so one
+  query can yield several lines. An ID the platform does not carry is
+  an error. Probes with no CpG in the genome, or on a contig a
+  genome-indexed store cannot address, are dropped and counted on
+  stderr.
 
 Options:
   --platform P      EPIC | EPICv2 | HM450 | MSA. Omit it and the
@@ -949,7 +961,11 @@ Options:
                     open -- this saves joining it back on.
   --all, -a         emit every sample column (default: first only)
   --beta            read fmt3 M/U as beta
-  --no-header       omit the header row</code></pre>
+  --no-header       omit the header row
+  --genome BUILD    coordinate mode: read probe IDs, print
+                    &lt;chrm&gt;_&lt;beg1&gt; per probe (e.g. hg38)
+  --coords FILE     the coordinate table (default: the store's
+                    &lt;platform&gt;.&lt;genome&gt;.coord.tsv.gz)</code></pre>
   </details>
   <details class="ref" id="ref-idat-dump">
     <summary><code class="inl">sesame idat-dump</code> <span class="m">— dump raw IDAT records, or a summary header</span></summary>
@@ -999,7 +1015,7 @@ Notes:
   <details class="ref" id="ref-version">
     <summary><code class="inl">sesame version</code> <span class="m">— version, the yame it links, the store</span></summary>
     <pre class="help"><code>sesame 2.1.0
-    built against  YAME v1.54
+    built against  YAME v1.57
     store          /home/user/.local/share/yame   ($YAME_DATA_HOME unset; yame fetch fills it)</code></pre>
   </details>
 </section>
@@ -1190,7 +1206,7 @@ Notes:
      * useful minimum width here -- start scrolling horizontally. */
     function colCount() {
       var w = window.innerWidth;
-      return w >= 980 ? 3 : w >= 640 ? 2 : 1;
+      return w >= 640 ? 2 : 1;   /* two columns at most, as on the YAME page */
     }
 
     /* fewest columns needed if no column may exceed `cap` */

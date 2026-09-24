@@ -37,6 +37,9 @@ while IFS=' ' read -r plat rel prep tol; do
     [ -n "$plat" ] || continue
     [ "$prep" = "-" ] && prep=""
     tol=${tol:-0}
+    ## SESAME_ONLY: an ERE over "<platform> <prefix> ..."; cases that do not
+    ## match are skipped so a parallel gate can run one case per job.
+    if [ -n "${SESAME_ONLY:-}" ] && ! echo "$plat $rel $prep" | grep -Eq "$SESAME_ONLY"; then continue; fi
     idx="$root/testdata/$plat.ordering.tsv.gz"
     pfx="$idats/$rel"
     if [ ! -f "$idx" ]; then

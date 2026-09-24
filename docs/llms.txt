@@ -13,10 +13,8 @@ second implementation of the R package sesame / openSesame, validated against
 R as a permanent oracle. No R, no Bioconductor, no network.
 
 SeSAMe2 (2.x, this command line) and sesame (1.x, the R/Bioconductor package)
-are PARALLEL, NOT SEQUENTIAL. Neither is an upgrade of the other; they are one
-project with two implementations. Install the R package with
-BiocManager::install("sesame"), this one with
-`conda install -c zhou-lab sesame`. The R package stays on the 1.x series. Do
+are PARALLEL, NOT SEQUENTIAL: one method, two implementations. R:
+BiocManager::install("sesame"); shell: `conda install -c zhou-lab sesame`. Do
 not tell a user to "upgrade" from one to the other.
 
 The binary is named `sesame`. Arrays: EPIC, EPICv2, HM450, MSA (plus MM285 and
@@ -76,8 +74,8 @@ the store path.
 
 Downloads are digest-verified; `shasum -a 256 -c SHA256SUMS` re-checks by hand.
 
-Not published: the CNV normal panel `<P>.cnvnormals.cg`. Build one with
-`make cnv-normals` or pass `cnv --normals`.
+The CNV normal panel `<P>.cnvnormals.cg` ships in the same release (v8.2+)
+and `cnv` finds it in the store; `cnv --normals` overrides it.
 
 There is no `sesame fetch` subcommand. A missing asset is an error naming the
 exact `yame fetch` to run — sesame never downloads and never prompts.
@@ -93,7 +91,8 @@ exact `yame fetch` to run — sesame never downloads and never prompts.
   impute        fill NA betas (--method mean|neighbors)
   region        <chr:beg-end> or --gene NAME -> long-form betas TSV
   deidentify    zero or reversibly scramble SNP beads in an IDAT
-  attach-probe  label a positional .cg/.cm/.tsv with Probe_IDs
+  describe-probe  label a positional .cg/.cm/.tsv with Probe_IDs, or
+                  --genome: probe IDs -> <chrm>_<beg1> coordinates
   idat-dump     inspect a raw .idat[.gz]
   version       version, the yame it links, the store
 
@@ -147,8 +146,13 @@ names. Read with `yame unpack` / `yame info`.
   format 4  beta.cg, total_intensity.cg, pval.cg  float32, NA negative
 
 A `.cg` is POSITIONAL: one value per ordering row, no Probe_IDs inside. Row i
-is probe i. `sesame attach-probe` joins the ordering back on; a row-count
-mismatch is a hard error, never silent misalignment.
+is probe i. `sesame describe-probe` joins the ordering back on; a row-count
+mismatch is a hard error, never silent misalignment. The same command with
+--genome goes the other way -- probe IDs to <chrm>_<beg1>, which is what
+`yame rowsub -L` reads, so the WGBS neighbourhood of a probe set is:
+  sesame describe-probe --platform HM450 --genome hg38 probes.txt \
+    | cut -f2 | yame rowsub -L - -w 15 -M map.tsv -1 wgbs.cg > win.cg
+`attach-probe` is the old name; it still runs and warns.
 
 ## Custom arrays
 

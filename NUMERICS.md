@@ -264,7 +264,7 @@ genome (tile at 50 kb, subtract assembly gaps, left/right-merge to ≥ 20 probes
 median per bin — `getBinCoordinates` + `leftRightMerge1` + `binSignals`).
 
 **The fit + log2 is numerically exact.** Fed R and C the *identical* per-probe
-totals (extracted from C's own `.cg` with `attach-probe`, so no data-lineage or
+totals (extracted from C's own `.cg` with `describe-probe`, so no data-lineage or
 channel ambiguity enters), C's OLS+log2 matches R's `lm` to **max 1.0e-5, median
 5e-8** over 937k EPICv2 probes (`tests/run_cnv.sh`; the 1e-5 tail is float32 `.cg`
 storage of the totals, not the fit). An independent pure-Python normal-equations

@@ -3,9 +3,17 @@
 #   make            build sesame
 #   make asan       build with ASan/UBSan
 #   make test       run the golden tests (needs an R with sesame; override the
-#                   binary with RSCRIPT=, e.g. make test RSCRIPT=Rscript-4.6.0)
+#                   binary with RSCRIPT=, e.g. make test RSCRIPT=Rscript-4.6.0).
+#                   The targets are independent and each driver works in its
+#                   own mktemp dir, so `make -j8 test` runs them in parallel
+#                   (221 s on 8 cores vs ~35 min serial with the R oracle,
+#                   and -j16 is no faster: the longest single target sets it;
+#                   add -Otarget under GNU make to keep each target's output
+#                   together).
 #   make test-docs  run every documented example against the built binary
 #                   (needs the store + test IDATs; not part of `make test`)
+#   make gate       the release gate: suite + docs gate + coverage in one
+#                   8-core SLURM job, ~4.5 min (scripts/coverage.sh --sbatch)
 #   make clean
 
 CC      ?= cc
@@ -48,13 +56,13 @@ YAME_INC := -I$(YAME_DIR)/src -I$(YAME_DIR)/htslib
 # exists rather than when make parses this file.
 YAME_LIBS := $$($(YAME_DIR)/yame-config --libs)
 
-SRC     := src/util.c src/numerics.c src/idat.c src/index.c src/sigdf.c src/prep.c src/qc.c src/dml.c src/cnv.c src/cbs.c src/vcf.c src/region.c src/collapse.c src/liftover.c src/impute.c src/deidentify.c src/mask.c src/cgwrite.c src/attach.c src/cache.c
+SRC     := src/util.c src/numerics.c src/idat.c src/index.c src/sigdf.c src/prep.c src/qc.c src/dml.c src/cnv.c src/cbs.c src/vcf.c src/region.c src/collapse.c src/liftover.c src/impute.c src/deidentify.c src/mask.c src/cgwrite.c src/describe.c src/cache.c
 CLI_SRC := cli/main.c
 OBJ     := $(SRC:.c=.o)
 CLI_OBJ := $(CLI_SRC:.c=.o)
 BIN     := sesame
 
-.PHONY: all asan docs test test-docs test-docs-check test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-attach test-cnv test-cbs test-vcf test-deidentify index cnv-normals registry yame-lib install fuzz fuzz-replay clean
+.PHONY: test-betas-HM450 test-betas-EPIC test-betas-EPICv2 test-betas-MSA test-prep-HM450 test-prep-EPIC test-prep-EPICv2 test-prep-MSA test-pneg-HM450 test-pneg-EPIC test-pneg-EPICv2 test-pneg-MSA test-dyebiasL-HM450 test-dyebiasL-EPIC test-dyebiasL-EPICv2 test-dyebiasL-MSA test-gct-HM450 test-gct-EPIC test-gct-EPICv2 test-gct-MSA test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome test-liftover-formats all asan docs test test-docs test-docs-check test-errors test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify gate index cnv-normals registry yame-lib install fuzz fuzz-replay clean
 
 all: $(BIN)
 
@@ -111,7 +119,7 @@ src/liftover.o: src/liftover.c include/sesame.h src/internal.h | $(YAME_LIB)
 	$(CC) -O2 -g -std=gnu11 -Wall -Iinclude $(YAME_INC) $(EXTRA_CFLAGS) -c -o $@ $<
 
 # attach.c also includes YAME headers; same relaxed rule as cgwrite.o.
-src/attach.o: src/attach.c include/sesame.h src/internal.h | $(YAME_LIB)
+src/describe.o: src/describe.c include/sesame.h src/internal.h | $(YAME_LIB)
 	$(CC) -O2 -g -std=gnu11 -Wall -Iinclude $(YAME_INC) $(EXTRA_CFLAGS) -c -o $@ $<
 
 # cache.c resolves the store root through YAME's shared asset layer (assets.h);
@@ -126,7 +134,108 @@ asan: clean
 	$(MAKE) EXTRA_CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
 	        EXTRA_LDFLAGS="-fsanitize=address,undefined"
 
-test: test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-attach test-cnv test-cbs test-vcf test-deidentify test-docs-check
+test: test-errors test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify test-docs-check
+
+# --- the slow drivers, split one target per platform -------------------------
+#
+# Each of these runs the R oracle once per platform, in series inside the one
+# script, which made them the long pole: `make -j` schedules TARGETS, so a
+# 4-platform driver is one job however many cores are free. Split, the longest
+# job is one platform (~130 s at -O0) instead of four (~200 s), and it helps
+# `make -j test` anywhere, not only where SLURM is.
+#
+# SESAME_ONLY is an ERE the driver matches each case against (see
+# tests/run_*.sh); the aggregate name still runs all of them. `^EPIC ` has the
+# space so it cannot also match EPICv2.
+
+test-betas-HM450: $(BIN) pipeline_dump
+	@SESAME_ONLY='^HM450 ' tests/run_betas.sh
+
+test-betas-EPIC: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPIC ' tests/run_betas.sh
+
+test-betas-EPICv2: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPICv2 ' tests/run_betas.sh
+
+test-betas-MSA: $(BIN) pipeline_dump
+	@SESAME_ONLY='^MSA ' tests/run_betas.sh
+
+test-betas: test-betas-HM450 test-betas-EPIC test-betas-EPICv2 test-betas-MSA
+
+test-prep-HM450: $(BIN) pipeline_dump
+	@SESAME_ONLY='^HM450 ' tests/run_prep.sh
+
+test-prep-EPIC: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPIC ' tests/run_prep.sh
+
+test-prep-EPICv2: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPICv2 ' tests/run_prep.sh
+
+test-prep-MSA: $(BIN) pipeline_dump
+	@SESAME_ONLY='^MSA ' tests/run_prep.sh
+
+test-prep: test-prep-HM450 test-prep-EPIC test-prep-EPICv2 test-prep-MSA
+
+test-pneg-HM450: $(BIN) pipeline_dump
+	@SESAME_ONLY='^HM450 ' tests/run_pneg.sh
+
+test-pneg-EPIC: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPIC ' tests/run_pneg.sh
+
+test-pneg-EPICv2: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPICv2 ' tests/run_pneg.sh
+
+test-pneg-MSA: $(BIN) pipeline_dump
+	@SESAME_ONLY='^MSA ' tests/run_pneg.sh
+
+test-pneg: test-pneg-HM450 test-pneg-EPIC test-pneg-EPICv2 test-pneg-MSA
+
+test-dyebiasL-HM450: $(BIN) pipeline_dump
+	@SESAME_ONLY='^HM450 ' tests/run_dyebiasL.sh
+
+test-dyebiasL-EPIC: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPIC ' tests/run_dyebiasL.sh
+
+test-dyebiasL-EPICv2: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPICv2 ' tests/run_dyebiasL.sh
+
+test-dyebiasL-MSA: $(BIN) pipeline_dump
+	@SESAME_ONLY='^MSA ' tests/run_dyebiasL.sh
+
+test-dyebiasL: test-dyebiasL-HM450 test-dyebiasL-EPIC test-dyebiasL-EPICv2 test-dyebiasL-MSA
+
+test-gct-HM450: $(BIN)
+	@SESAME_ONLY='^HM450 ' tests/run_gct.sh
+
+test-gct-EPIC: $(BIN)
+	@SESAME_ONLY='^EPIC ' tests/run_gct.sh
+
+test-gct-EPICv2: $(BIN)
+	@SESAME_ONLY='^EPICv2 ' tests/run_gct.sh
+
+test-gct-MSA: $(BIN)
+	@SESAME_ONLY='^MSA ' tests/run_gct.sh
+
+test-gct: test-gct-HM450 test-gct-EPIC test-gct-EPICv2 test-gct-MSA
+
+test-liftover-toEPIC: $(BIN) pipeline_dump
+	@SESAME_ONLY=' EPIC$$' tests/run_liftover.sh
+
+test-liftover-toEPICv2: $(BIN) pipeline_dump
+	@SESAME_ONLY=' EPICv2$$' tests/run_liftover.sh
+
+test-liftover-genome: $(BIN) pipeline_dump
+	@SESAME_ONLY=' hg38$$' tests/run_liftover.sh
+
+test-liftover-formats: $(BIN) pipeline_dump mu2cg
+	@SESAME_ONLY='fmt|refusals' tests/run_liftover.sh
+
+test-liftover: test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome test-liftover-formats
+
+# Negative tests: the error surface the golden ladder never touches. No R, no
+# store, no IDATs -- so this one also runs in CI.
+test-errors: $(BIN) mu2cg
+	@tests/run_errors.sh
 
 test-idat: $(BIN)
 	@tests/run_golden.sh
@@ -156,12 +265,6 @@ docs: $(BIN)
 test-docs: $(BIN)
 	@python3 tests/docs_gate.py
 
-test-betas: $(BIN) pipeline_dump
-	@tests/run_betas.sh
-
-test-prep: $(BIN) pipeline_dump
-	@tests/run_prep.sh
-
 test-qmask: $(BIN) pipeline_dump
 	@tests/run_qmask.sh
 
@@ -189,23 +292,11 @@ mu2cg: tools/mu2cg.c $(OBJ) $(YAME_LIB) $(HTSLIB) include/sesame.h
 test-noob: $(BIN) normexp_test pipeline_dump
 	@tests/run_noob.sh
 
-test-dyebiasL: $(BIN) pipeline_dump
-	@tests/run_dyebiasL.sh
-
-test-pneg: $(BIN) pipeline_dump
-	@tests/run_pneg.sh
-
 test-collapse: $(BIN) pipeline_dump
 	@tests/run_collapse.sh
 
-test-liftover: $(BIN) pipeline_dump
-	@tests/run_liftover.sh
-
 test-impute: $(BIN)
 	@tests/run_impute.sh
-
-test-gct: $(BIN)
-	@tests/run_gct.sh
 
 test-neighbors: $(BIN) pipeline_dump
 	@tests/run_neighbors.sh
@@ -222,8 +313,8 @@ test-dml: $(BIN)
 test-cg: $(BIN) pipeline_dump
 	@tests/run_cg.sh
 
-test-attach: $(BIN) mu2cg
-	@tests/run_attach.sh
+test-describe: $(BIN) mu2cg
+	@tests/run_describe.sh
 
 test-cnv: $(BIN)
 	@tests/run_cnv.sh
@@ -237,6 +328,12 @@ test-vcf: $(BIN)
 test-deidentify: $(BIN)
 	@tests/run_deidentify.sh
 
+# The release gate in one command: suite + docs gate + coverage, one SLURM job
+# per shard (scripts/coverage.sh --sbatch), and a stale badge fails it. Needs
+# the R oracle (RSCRIPT=), the test IDATs and a populated $YAME_DATA_HOME.
+gate: $(BIN)
+	scripts/coverage.sh --sbatch --check
+
 # Export ordering tables from sesameData (bootstrap; needs Rscript + sesame).
 PLATFORMS := HM450 EPIC EPICv2 MSA
 index:
@@ -245,15 +342,19 @@ index:
 	done
 
 # Export the per-platform CNV normal references (format-3 .cg) from sesameData.
-# These are NOT published in the InfiniumAnnotation release, so `yame fetch`
-# does not supply them -- this target is how you make one, and `cnv --normals`
-# is how you point at it. Genome-level genomeInfo is likewise not here: it lives
-# in zhou-lab/genomes (generate with tools/export_genomeinfo.R) and is pulled by
-# `yame fetch genomes/<build>`. Needs Rscript.
+# This is how the <PLAT>.cnvnormals.cg shipped in the InfiniumAnnotation
+# release (v8.2+) were made; `yame fetch` supplies them and `cnv` finds them in
+# the store, so run this only to rebuild one. The panel is positional on the
+# RELEASE ordering (the store copy), not testdata/ -- the testdata orderings
+# are exported from R and can differ from the release (MSA: 8 extra probes).
+# Genome-level genomeInfo is not here: it lives in zhou-lab/genomes (generate
+# with tools/export_genomeinfo.R) and is pulled by `yame fetch genomes/<build>`.
+# Needs Rscript and $YAME_DATA_HOME.
 cnv-normals: mu2cg
-	@for p in EPIC EPICv2; do \
+	@for p in EPIC EPICv2 HM450 MSA; do \
 	    mkdir -p data/$$p; \
-	    $(RSCRIPT) tools/export_cnvnormals.R $$p testdata/$$p.ordering.tsv.gz \
+	    $(RSCRIPT) tools/export_cnvnormals.R $$p \
+	        $$YAME_DATA_HOME/$$p/$$p.ordering.tsv.gz \
 	        data/$$p/$$p.cnvnormals.mu.tsv.gz && \
 	    ./mu2cg data/$$p/$$p.cnvnormals.mu.tsv.gz \
 	        data/$$p/$$p.cnvnormals.cg && \
