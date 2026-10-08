@@ -38,6 +38,12 @@ yame="$root/YAME/yame"
 [ -x "$yame" ] || make -C "$root/YAME" >/dev/null 2>&1 || true
 [ -x "$yame" ] || { echo "SKIP Q: could not build $yame"; exit 0; }
 
+## No store or no test IDATs at all is a machine that cannot measure this
+## (CI), and SKIPs like every other driver. A populated store that lacks
+## one platform is different: that platform FAILs below.
+ls "$store"/*/*.cm >/dev/null 2>&1 || { echo "SKIP Q: no .cm under $store"; exit 0; }
+[ -d "$idats" ] || { echo "SKIP Q: $idats not found"; exit 0; }
+
 # platform  sample-prefix  <recommended track names...>
 run_one() {
     plat=$1; rel=$2; shift 2
