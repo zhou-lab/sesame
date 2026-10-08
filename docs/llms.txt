@@ -182,6 +182,9 @@ Mask: a `.cm` is a bitset, one bit per ordering row, 1 = drop.
 - `--mask` given directly wants a SINGLE-track `.cm`. A published platform's
   mask holds many (EPICv2 has 25) and sesame picks the recommended subset by
   platform NAME; a nameless file is ambiguous and refused rather than unioned.
+- The recommended subset is the same five M_* tracks on HM450, EPIC, EPICv2
+  and MSA. A `.cm` with none of them stops Q with an error (before 2.2.1,
+  Q silently masked nothing on HM450/EPIC).
 - When a named platform ships several `.cm` (MM285: mm10 and mm39) the
   lexicographically first wins — name `--mask` when the build matters.
 - A batch is one platform; a failed sample becomes an all-NA block and sets

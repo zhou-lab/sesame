@@ -116,30 +116,57 @@ in this implementation, and neither result is "more correct" than the other.
 The `Q` step (qualityMask) reads the recommended mask sets from the platform's
 YAME `.cm` in the store. SeSAMe2 links YAME directly (both carry the same CHOP
 academic BSD-2 terms, same author) and reads the `.cm` in-process via the YAME
-C API -- no `yame` binary at runtime. A probe is masked iff it is set in any of `recommendedMaskNames(platform)` — `M_1baseSwitchSNPcommon_5pt`,
-`M_2extBase_SNPcommon_5pt`, `M_mapping`, `M_nonuniq`, `M_SNPcommon_5pt` for MSA.
+C API -- no `yame` binary at runtime. A probe is masked iff it is set in any
+of five tracks -- `M_1baseSwitchSNPcommon_5pt`, `M_2extBase_SNPcommon_5pt`,
+`M_mapping`, `M_nonuniq`, `M_SNPcommon_5pt` -- the same list on HM450, EPIC,
+EPICv2 and MSA. If the `.cm` carries none of them, `Q` stops with an error.
+
+Through v2.2.0 HM450 and EPIC used R's names for their set (`mapping`,
+`channel_switch`, `snp5_GMAF1p`, `extension`, `sub30_copy`). Those are
+sesameData's KYCG names; the store's v8 `.cm` has none of them, so `Q`
+masked nothing on HM450/EPIC and nothing said so (zhou-lab/sesame#1).
 
 sesame-cli's `Q` is verified **self-consistent**: it masks exactly the yame
-union applied to the ordering (14,494 probes on the MSA test array — an exact
-gate, `tests/run_qmask.sh`).
+union applied to the ordering, on every platform -- an exact gate,
+`tests/run_qmask.sh`, which FAILS rather than SKIPs when a platform's `.cm`
+or test IDAT is missing. Measured 2026-10-08 on the v8.2 store:
 
-It is **not** bit-identical to R's `qualityMask`, and cannot be, because the
-published `.cm` is a *newer mask lineage* than the KYCG object sesameData
-currently ships — the same situation as the ordering table (284,309 vs 284,317
-probes). Measured against R (`KYCG.MSA.Mask.20260122`) on the MSA test array:
+| platform | test array | CLI `Q` | R `qualityMask` | CLI-only | R-only |
+|---|---|---:|---:|---:|---:|
+| HM450 | 3999492009_R01C01 | 29,504 | 64,144 | 19 | 34,657 |
+| EPIC | GSM2995280_201868590258_R01C01 | 44,339 | 105,454 | 32 | 61,147 |
+| EPICv2 | 206909630040_R03C01 | 31,983 | 32,896 | 168 | 1,079 |
+| MSA | 207760740030_R01C03 | 14,316 | 14,249 | 76 | 9 |
 
-| | count |
-|---|---|
-| R qualityMask | 14,249 |
-| sesame-cli Q (repo `.cm`, "B1 coherent") | 14,494 |
-| shared | 14,240 |
-| **Jaccard** | **0.982** |
+(R: sesame 1.31.5, sesameData 1.29.10. The CLI counts exclude two STAINING
+controls that are NA on HM450 and EPICv2 with no prep at all.)
 
-The residual (9 R-only, incl. the 8 deleted probes; 254 C-only) is the
-mask-version bump, not an implementation error — per-track the two agree ~90%+
-(`M_mapping`: 1693 shared of 1870/1939). This converges when sesameData ships
-the same mask version. sesame-cli always applies whatever `.cm` the pinned tag
-publishes; the number above pins *which* lineage was measured.
+It is **not** identical to R's `qualityMask`, for two different reasons:
+
+- **EPICv2 and MSA: mask version.** Same five track names, but the store's
+  `.cm` is a newer build than the KYCG object sesameData ships. The residual
+  is a few hundred probes either way and converges when sesameData ships the
+  same version.
+- **HM450 and EPIC: different definitions.** R still masks the older KYCG
+  tracks for these two, a different and broader set, so R masks about
+  twice as many probes. sesame-cli applies the same five M_* tracks as on
+  EPICv2/MSA.
+
+R sesame 1.31.6 switches HM450/EPIC to the M_* tracks too, and sesameData
+1.31.1 ships `KYCG.{HM450,EPIC,EPICv2,MSA}.Mask.20261008`, built from the
+store's v8.2 `.cm`. Measured before release (a private install), R's own
+`qualityMask` then equals the CLI's `Q` exactly on all four platforms:
+0 CLI-only, 0 R-only. `tests/run_qcdpb.sh` expects that 0/0 as soon as the
+oracle carries those objects.
+
+Given the CLI's own mask (`addMask(sdf, <CLI Q set>)` then `CDPB`), R's
+betas agree with the CLI's `QCDPB` to max |diff| 3.4e-4 (HM450), 1.5e-5
+(EPICv2), 1.7e-4 (MSA), and 7.5e-2 on one EPIC probe -- the D/P/B lineage
+residuals described below, not `Q`. `tests/run_qcdpb.sh` gates exactly
+that, per platform: R's mask must equal the CLI's, the NA-mismatch count and
+the set of probes off by more than 1e-3 must equal the pinned ones (26/none,
+91/`cg09334382`, 0/none, 20/none for HM450/EPIC/EPICv2/MSA), and every other
+probe must stay under the pinned ceiling.
 
 ## P (pOOBAH) — algorithm exact, residual is boundary + lineage
 

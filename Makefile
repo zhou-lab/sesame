@@ -62,7 +62,7 @@ OBJ     := $(SRC:.c=.o)
 CLI_OBJ := $(CLI_SRC:.c=.o)
 BIN     := sesame
 
-.PHONY: test-betas-HM450 test-betas-EPIC test-betas-EPICv2 test-betas-MSA test-prep-HM450 test-prep-EPIC test-prep-EPICv2 test-prep-MSA test-pneg-HM450 test-pneg-EPIC test-pneg-EPICv2 test-pneg-MSA test-dyebiasL-HM450 test-dyebiasL-EPIC test-dyebiasL-EPICv2 test-dyebiasL-MSA test-gct-HM450 test-gct-EPIC test-gct-EPICv2 test-gct-MSA test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome test-liftover-formats all asan docs test test-docs test-docs-check test-errors test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify gate index cnv-normals registry yame-lib install fuzz fuzz-replay clean
+.PHONY: test-qcdpb-HM450 test-qcdpb-EPIC test-qcdpb-EPICv2 test-qcdpb-MSA test-qcdpb test-betas-HM450 test-betas-EPIC test-betas-EPICv2 test-betas-MSA test-prep-HM450 test-prep-EPIC test-prep-EPICv2 test-prep-MSA test-pneg-HM450 test-pneg-EPIC test-pneg-EPICv2 test-pneg-MSA test-dyebiasL-HM450 test-dyebiasL-EPIC test-dyebiasL-EPICv2 test-dyebiasL-MSA test-gct-HM450 test-gct-EPIC test-gct-EPICv2 test-gct-MSA test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome test-liftover-formats all asan docs test test-docs test-docs-check test-errors test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify gate index cnv-normals registry yame-lib install fuzz fuzz-replay clean
 
 all: $(BIN)
 
@@ -134,7 +134,7 @@ asan: clean
 	$(MAKE) EXTRA_CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
 	        EXTRA_LDFLAGS="-fsanitize=address,undefined"
 
-test: test-errors test-idat test-betas test-prep test-qmask test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify test-docs-check
+test: test-errors test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify test-docs-check
 
 # --- the slow drivers, split one target per platform -------------------------
 #
@@ -267,6 +267,22 @@ test-docs: $(BIN)
 
 test-qmask: $(BIN) pipeline_dump
 	@tests/run_qmask.sh
+
+# Q + the default QCDPB against R, R given sesame's Q mask: exact on the mask,
+# the betas at a pinned per-platform residual (tests/compare_qcdpb.R).
+test-qcdpb-HM450: $(BIN) pipeline_dump
+	@SESAME_ONLY='^HM450 ' tests/run_qcdpb.sh
+
+test-qcdpb-EPIC: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPIC ' tests/run_qcdpb.sh
+
+test-qcdpb-EPICv2: $(BIN) pipeline_dump
+	@SESAME_ONLY='^EPICv2 ' tests/run_qcdpb.sh
+
+test-qcdpb-MSA: $(BIN) pipeline_dump
+	@SESAME_ONLY='^MSA ' tests/run_qcdpb.sh
+
+test-qcdpb: test-qcdpb-HM450 test-qcdpb-EPIC test-qcdpb-EPICv2 test-qcdpb-MSA
 
 test-poobah: $(BIN) pipeline_dump
 	@tests/run_poobah.sh

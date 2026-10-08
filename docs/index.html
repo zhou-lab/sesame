@@ -677,7 +677,10 @@ yame index -s names.txt MyArray.mask.cm  <span class="cm"># name it</span></code
       <b>single-track</b> <code class="inl">.cm</code> — a published platform's mask
       holds many (EPICv2 has 25) and sesame picks the recommended subset by platform
       name, so handing one over without a name would be ambiguous. It says so rather
-      than guessing.</p>
+      than guessing. The recommended subset is the same five <code class="inl">M_*</code>
+      tracks on HM450, EPIC, EPICv2 and MSA, and a <code class="inl">.cm</code> with none
+      of them stops <code class="inl">Q</code> with an error instead of masking
+      nothing.</p>
   </section>
 
 </div>

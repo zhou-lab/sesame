@@ -32,10 +32,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* recommendedMaskNames() (R/mask.R:197-220) -- the Q set; NULL-terminated. */
-static const char *const REC_EPIC[] = {
-    "mapping", "channel_switch", "snp5_GMAF1p", "extension", "sub30_copy", NULL };
-static const char *const REC_MSA[] = {   /* also EPICv2 */
+/* The Q set, NULL-terminated: recommendedMaskNames() (R/mask.R:197-220) in
+ * the published .cm's track names. One list for all four human arrays.
+ *
+ * R still names the HM450/EPIC set in sesameData's KYCG lineage ("mapping",
+ * "channel_switch", "snp5_GMAF1p", "extension", "sub30_copy"). The .cm the
+ * store ships for HM450 and EPIC (InfiniumAnnotation v8) carries the same
+ * M_* tracks as MSA/EPICv2 and none of those names, so a list in R's names
+ * matched nothing and Q masked nothing on HM450/EPIC through v2.2.0
+ * (zhou-lab/sesame#1). The M_* tracks are the same five failure modes:
+ * mapping, non-unique, common SNP at the target, at the colour-switching
+ * base, and at the extension base. */
+static const char *const REC_HUMAN[] = {
     "M_1baseSwitchSNPcommon_5pt", "M_2extBase_SNPcommon_5pt",
     "M_mapping", "M_nonuniq", "M_SNPcommon_5pt", NULL };
 
@@ -49,10 +57,9 @@ static const char *const BG_NAMES[] = {
 static const char *const *recommended_names(const char *platform)
 {
     if (!platform) return NULL;
-    if (strcmp(platform, "EPIC") == 0 || strcmp(platform, "HM450") == 0)
-        return REC_EPIC;
-    if (strcmp(platform, "MSA") == 0 || strcmp(platform, "EPICv2") == 0)
-        return REC_MSA;
+    if (strcmp(platform, "HM450") == 0 || strcmp(platform, "EPIC") == 0 ||
+        strcmp(platform, "EPICv2") == 0 || strcmp(platform, "MSA") == 0)
+        return REC_HUMAN;
     return NULL;
 }
 
@@ -99,9 +106,12 @@ static int find_cm(const char *platform, char *out, size_t n)
 
 /* Read the platform's .cm and return the union of the named tracks as a 0/1
  * vector aligned to the ordering (out[i] == 1 -> probe i is in some track).
- * Tracks not present in the .cm simply never match. */
+ * Tracks not present in the .cm simply never match -- unless need_one is set
+ * and NONE of the names is there: then the mask would be empty, and an empty
+ * mask is a lineage mismatch, not a clean array. Q sets it; the background
+ * list spans several lineages by design and does not. */
 static int mask_union(const char *platform, const char *maskpath,
-                      const char *const *names,
+                      const char *const *names, int need_one,
                       uint8_t **out, int32_t *out_n, sesame_err_t *err)
 {
     char cm[4096];
@@ -109,7 +119,7 @@ static int mask_union(const char *platform, const char *maskpath,
     snames_t sn;
     uint8_t *mask = NULL;
     int32_t n = 0;
-    int k = 0;
+    int k = 0, matched = 0;
 
     if (err) { err->code = SESAME_OK; err->msg[0] = '\0'; }
     /* No recommended track list means we do not know this platform -- a custom
@@ -158,6 +168,7 @@ static int mask_union(const char *platform, const char *maskpath,
         name = (k < sn.n) ? sn.s[k] : "";
         if (mask && (!names || is_recommended(name, names))) {
             int32_t i;
+            matched++;
             for (i = 0; i < n; i++) if (FMT0_IN_SET(c, i)) mask[i] = 1;
         }
         free_cdata(&c);
@@ -168,6 +179,17 @@ static int mask_union(const char *platform, const char *maskpath,
 
     if (!mask)
         return sesame__fail(err, SESAME_ERR_FORMAT, "empty .cm mask for %s", platform);
+    if (need_one && names && matched == 0) {
+        const char *base = strrchr(cm, '/');
+        int nn = 0;
+        while (names[nn]) nn++;
+        free(mask);
+        /* err->msg is 256 bytes: name one track, not all of them */
+        return sesame__fail(err, SESAME_ERR_FORMAT,
+            "%s has none of the %d recommended Q tracks for %s (e.g. %s), so "
+            "Q would mask nothing. Use the store's .cm, or drop Q from --prep.",
+            base ? base + 1 : cm, nn, platform, names[0]);
+    }
     *out = mask;
     *out_n = n;
     return SESAME_OK;
@@ -178,7 +200,8 @@ int sesame_quality_mask(const char *platform, const char *maskpath,
                         uint8_t **out, int32_t *out_n,
                         sesame_err_t *err)
 {
-    return mask_union(platform, maskpath, recommended_names(platform), out, out_n, err);
+    return mask_union(platform, maskpath, recommended_names(platform), 1,
+                      out, out_n, err);
 }
 
 /* P/B: the background mask (union of backgroundMask names), the probes EXCLUDED
@@ -187,5 +210,5 @@ int sesame_background_mask(const char *platform, const char *maskpath,
                            uint8_t **out, int32_t *out_n,
                            sesame_err_t *err)
 {
-    return mask_union(platform, maskpath, BG_NAMES, out, out_n, err);
+    return mask_union(platform, maskpath, BG_NAMES, 0, out, out_n, err);
 }

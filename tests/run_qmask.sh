@@ -8,8 +8,14 @@
 # What it CAN pin exactly is that sesame reads and unions the .cm correctly and
 # aligns it to the ordering.
 #
-# Needs: the submodule `yame` binary, and a fetched store with the platform's .cm
-# (e.g. data/MSA/). Skips cleanly if either is missing.
+# Every platform sesame knows is a case: HM450, EPIC, EPICv2, MSA. A case
+# FAILS (not SKIPs) when its .cm or test IDAT is missing, so no platform can
+# drop out of the gate unnoticed -- that is how Q went empty on HM450/EPIC
+# through v2.2.0 (zhou-lab/sesame#1) with this test green on MSA alone.
+# The expected set must also be non-empty: an empty union is a lineage
+# mismatch between the track names and the .cm, never a clean answer.
+#
+# Needs: the submodule `yame` binary and a fetched store.
 set -eu
 
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -37,9 +43,10 @@ run_one() {
     plat=$1; rel=$2; shift 2
     cm=$(ls "$store/$plat"/*.cm 2>/dev/null | head -1 || true)
     pfx="$idats/$rel"
-    if [ -z "$cm" ]; then echo "SKIP $plat Q: no .cm in $store/$plat"; return; fi
+    if [ -z "$cm" ]; then
+        echo "FAIL $plat Q: no .cm in $store/$plat"; FAIL=$((FAIL+1)); return; fi
     if [ ! -f "$pfx"_Grn.idat ] && [ ! -f "$pfx"_Grn.idat.gz ]; then
-        echo "SKIP $plat Q: no IDAT $pfx"; return; fi
+        echo "FAIL $plat Q: no IDAT $pfx"; FAIL=$((FAIL+1)); return; fi
 
     # expected: ordering Probe_IDs where the yame union of the given tracks is set
     printf '%s\n' "$@" > "$work/names.txt"
@@ -55,11 +62,20 @@ for i,row in enumerate(open(sys.argv[2])):
 open(sys.argv[3],"w").write("\n".join(sorted(exp))+"\n")
 PY
 
-    # actual: probes sesame masks (NA) under prep=Q
-    YAME_DATA_HOME="$yhome" "$dump" --prep Q --what beta "$pfx" 2>/dev/null \
-      | python3 -c "import sys; print('\n'.join(sorted(l.split('\t')[0] for l in sys.stdin if l.rstrip('\n').split('\t')[1]=='NA')))" \
-      > "$work/actual.txt"
+    # actual: probes sesame masks (NA) under prep=Q, less those already NA
+    # with no prep at all (HM450 and EPICv2 each carry two STAINING controls
+    # that never get a beta)
+    for q in Q ""; do
+        YAME_DATA_HOME="$yhome" "$dump" --prep "$q" --what beta "$pfx" 2>/dev/null \
+          | python3 -c "import sys; print('\n'.join(sorted(l.split('\t')[0] for l in sys.stdin if l.rstrip('\n').split('\t')[1]=='NA')))" \
+          > "$work/na_$q.txt"
+    done
+    LC_ALL=C comm -23 "$work/na_Q.txt" "$work/na_.txt" > "$work/actual.txt"
 
+    if ! grep -q . "$work/expected.txt"; then
+        echo "FAIL $plat Q: none of the $# tracks is in $cm"
+        FAIL=$((FAIL+1)); return
+    fi
     if cmp -s "$work/expected.txt" "$work/actual.txt"; then
         echo "ok   $plat Q  $(wc -l < "$work/expected.txt" | tr -d ' ') probes = yame union of $# tracks"
         PASS=$((PASS+1))
@@ -71,8 +87,37 @@ PY
 }
 
 PASS=0; FAIL=0
-run_one MSA MSA/207760740030_R01C03 \
-    M_1baseSwitchSNPcommon_5pt M_2extBase_SNPcommon_5pt M_mapping M_nonuniq M_SNPcommon_5pt
+## the recommended set, one list for all four (src/mask.c REC_HUMAN)
+rec="M_1baseSwitchSNPcommon_5pt M_2extBase_SNPcommon_5pt M_mapping M_nonuniq M_SNPcommon_5pt"
+run_one HM450  HM450/3999492009_R01C01             $rec
+run_one EPIC   EPIC/GSM2995280_201868590258_R01C01 $rec
+run_one EPICv2 EPICv2/206909630040_R03C01          $rec
+run_one MSA    MSA/207760740030_R01C03             $rec
+
+## A .cm that carries none of the recommended tracks must stop Q with an
+## error, not hand back an empty mask. Built from HM450's own .cm, so only
+## the track NAME is wrong: M_general is real, just not recommended.
+cm=$(ls "$store/HM450"/*.cm 2>/dev/null | head -1 || true)
+pfx="$idats/HM450/3999492009_R01C01"
+if [ -n "$cm" ] && [ -f "$pfx"_Grn.idat ]; then
+    "$yame" subset "$cm" M_general > "$work/norec.cm" 2>/dev/null
+    "$yame" index "$work/norec.cm" >/dev/null 2>&1
+    if YAME_DATA_HOME="$yhome" "$bin" preprocess --platform HM450 \
+           --mask "$work/norec.cm" --prep Q --output beta --out "$work/nr" \
+           "$pfx" >/dev/null 2>"$work/nr.err"; then
+        echo "FAIL HM450 Q: a .cm with no recommended track was accepted"
+        FAIL=$((FAIL+1))
+    elif grep -q "none of the 5 recommended Q tracks" "$work/nr.err"; then
+        echo "ok   HM450 Q  refuses a .cm with no recommended track"
+        PASS=$((PASS+1))
+    else
+        echo "FAIL HM450 Q: wrong error for a .cm with no recommended track"
+        sed 's/^/    /' "$work/nr.err" | head -3
+        FAIL=$((FAIL+1))
+    fi
+else
+    echo "FAIL HM450 Q: no .cm or IDAT for the refusal case"; FAIL=$((FAIL+1))
+fi
 
 echo
 echo "passed $PASS, failed $FAIL"
