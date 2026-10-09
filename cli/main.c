@@ -166,8 +166,9 @@ static int usage_preprocess(void)
     yame_usage_text("qc.tsv   per-sample QC");
 
     yame_usage_sec("Notes:");
-    yame_usage_text("Without --index the platform comes from the bead count and the");
-    yame_usage_text("ordering from the shared store ($YAME_DATA_HOME), then ./.");
+    yame_usage_text("A named known --platform skips the platform bead-count check.");
+    yame_usage_text("Otherwise, without --index, the bead count identifies the platform;");
+    yame_usage_text("the ordering comes from the shared store ($YAME_DATA_HOME), then ./.");
     return 1;
 }
 
@@ -569,7 +570,7 @@ typedef struct {
     char           **prefixes;
     int32_t          nsamp, n;
     const sesame_index_t *ix;
-    const char      *plat, *prep;
+    const char      *plat, *prep, *expect_plat;
     const uint8_t   *qmask, *bgmask, *ext;
     int32_t          qn, bgn, extn;
     int              min_beads, raw_signal, pneg_detection;
@@ -606,7 +607,7 @@ static void *pp_worker(void *arg)
         tot  = c->matTot  ? c->matTot  + (size_t)j*(size_t)n : NULL;
         pval = c->matPval ? c->matPval + (size_t)j*(size_t)n : NULL;
 
-        rc = build_sigdf_for(c->prefixes[j], c->ix, c->plat, c->min_beads, &raw, &e);
+        rc = build_sigdf_for(c->prefixes[j], c->ix, c->expect_plat, c->min_beads, &raw, &e);
         if (rc == SESAME_OK) st = raw->status;
         if (rc == SESAME_OK && c->want_qc)
             rc = sesame_qc_calc(raw, c->bgmask, c->bgn, c->ext, c->extn, &c->qcres[j], &e);
@@ -757,6 +758,13 @@ static int cmd_preprocess(int argc, char **argv)
     if (tmpdir) setenv("TMPDIR", tmpdir, 1);
     mkdir(outdir, 0777);                              /* ok if it already exists */
 
+    /* An explicit known platform is authoritative even for IDATs whose bead
+     * count differs from the registry. Keep batch validation for inference. */
+    int explicit_platform = 0;
+    if (platform)
+        for (const sesame_reg_t *reg = SESAME_REGISTRY; reg->platform; reg++)
+            if (strcmp(platform, reg->platform) == 0) { explicit_platform = 1; break; }
+
     if (!idxpath) {
         if (!platform) {
             char gp[4096]; sesame_idat_t *g0 = NULL; int32_t beads;
@@ -808,6 +816,7 @@ static int cmd_preprocess(int argc, char **argv)
     }
 
     ctx.prefixes=prefixes; ctx.nsamp=nsamp; ctx.n=n; ctx.ix=ix; ctx.plat=plat; ctx.prep=prep;
+    ctx.expect_plat = explicit_platform ? NULL : plat;
     ctx.qmask=qmask; ctx.qn=qn; ctx.bgmask=bgmask; ctx.bgn=bgn; ctx.ext=ext; ctx.extn=extn;
     ctx.min_beads=min_beads; ctx.raw_signal=raw_signal; ctx.pneg_detection=pneg_detection;
     ctx.matBeta=mB.data; ctx.matM=mM.data; ctx.matU=mU.data; ctx.matTot=mT.data; ctx.matPval=mP.data;

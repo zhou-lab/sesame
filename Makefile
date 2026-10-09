@@ -236,6 +236,7 @@ test-liftover: test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome 
 # store, no IDATs -- so this one also runs in CI.
 test-errors: $(BIN) mu2cg
 	@tests/run_errors.sh
+	@python3 tests/platform_override.py
 
 test-idat: $(BIN)
 	@tests/run_golden.sh
