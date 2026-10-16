@@ -239,7 +239,7 @@
     <a href="https://zhou-lab.github.io/YAME/">YAME</a><span>·</span>
     <a href="https://zwdzwd.github.io/InfiniumAnnotation">InfiniumAnnotation</a><span>·</span>
     <a href="https://zhou-lab.github.io/cinderplot/">cinderplot</a><span>·</span>
-    EPIC · EPICv2 · HM450 · MSA
+    EPIC · EPICv2 · HM27 · HM450 · MSA
   </p>
 </header>
 
@@ -678,9 +678,9 @@ yame index -s names.txt MyArray.mask.cm  <span class="cm"># name it</span></code
       holds many (EPICv2 has 25) and sesame picks the recommended subset by platform
       name, so handing one over without a name would be ambiguous. It says so rather
       than guessing. The recommended subset is the same five <code class="inl">M_*</code>
-      tracks on HM450, EPIC, EPICv2 and MSA, and a <code class="inl">.cm</code> with none
-      of them stops <code class="inl">Q</code> with an error instead of masking
-      nothing.</p>
+      tracks on HM450, EPIC, EPICv2 and MSA (HM27 carries four of these), and a
+      <code class="inl">.cm</code> with none of them stops <code class="inl">Q</code>
+      with an error instead of masking nothing.</p>
   </section>
 
 </div>
@@ -725,8 +725,8 @@ Options:
                     control ECDF). Masking always uses pOOBAH.
   --collapse        average replicate probes to their cg-prefix in the
                     beta output; axis -&gt; beta.cg.probes
-  --platform P      EPIC | EPICv2 | HM450 | MSA (else from the bead
-                    count), or the path to an ordering file, which is
+  --platform P      EPIC | EPICv2 | HM27 | HM450 | MSA (else from the
+                    bead count), or the path to an ordering file, which is
                     how a custom array is named.
   --mask FILE       quality/background mask .cm. Inferred for a named
                     platform; required for a custom array using Q/P/B.

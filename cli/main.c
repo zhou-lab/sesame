@@ -150,8 +150,8 @@ static int usage_preprocess(void)
     yame_usage_cont("control ECDF). Masking always uses pOOBAH.");
     yame_usage_opt("--collapse", "average replicate probes to their cg-prefix in the");
     yame_usage_cont("beta output; axis -> beta.cg.probes");
-    yame_usage_opt("--platform P", "EPIC | EPICv2 | HM450 | MSA (else from the bead");
-    yame_usage_cont("count), or the path to an ordering file, which is");
+    yame_usage_opt("--platform P", "EPIC | EPICv2 | HM27 | HM450 | MSA (else from the");
+    yame_usage_cont("bead count), or the path to an ordering file, which is");
     yame_usage_cont("how a custom array is named.");
     yame_usage_opt("--mask FILE", "quality/background mask .cm. Inferred for a named");
     yame_usage_cont("platform; required for a custom array using Q/P/B.");

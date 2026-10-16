@@ -33,7 +33,8 @@
 #include <string.h>
 
 /* The Q set, NULL-terminated: recommendedMaskNames() (R/mask.R:197-220) in
- * the published .cm's track names. One list for all four human arrays.
+ * the published .cm's track names. HM27 carries four of these five tracks
+ * (no M_2extBase_SNPcommon_5pt); absent tracks do not contribute to the union.
  *
  * R still names the HM450/EPIC set in sesameData's KYCG lineage ("mapping",
  * "channel_switch", "snp5_GMAF1p", "extension", "sub30_copy"). The .cm the
@@ -57,7 +58,8 @@ static const char *const BG_NAMES[] = {
 static const char *const *recommended_names(const char *platform)
 {
     if (!platform) return NULL;
-    if (strcmp(platform, "HM450") == 0 || strcmp(platform, "EPIC") == 0 ||
+    if (strcmp(platform, "HM27") == 0 || strcmp(platform, "HM450") == 0 ||
+        strcmp(platform, "EPIC") == 0 ||
         strcmp(platform, "EPICv2") == 0 || strcmp(platform, "MSA") == 0)
         return REC_HUMAN;
     return NULL;
