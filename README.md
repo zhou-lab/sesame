@@ -7,7 +7,7 @@
   <a href="scripts/coverage.sh"><img alt="coverage" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fzhou-lab.github.io%2Fsesame%2Fcoverage.json"></a>
   <a href="https://zhou-lab.github.io/sesame/"><img alt="docs" src="https://img.shields.io/badge/docs-online-blueviolet"></a>
   <a href="include/sesame.h"><img alt="language" src="https://img.shields.io/badge/C-C11-00599C"></a>
-  <a href="https://zhou-lab.github.io/sesame/"><img alt="arrays" src="https://img.shields.io/badge/arrays-EPIC%20%7C%20EPICv2%20%7C%20HM450%20%7C%20MSA-brightgreen"></a>
+  <a href="https://zhou-lab.github.io/sesame/"><img alt="arrays" src="https://img.shields.io/badge/arrays-EPIC%20%7C%20EPICv2%20%7C%20HM27%20%7C%20HM450%20%7C%20MSA-brightgreen"></a>
   <a href="NUMERICS.md"><img alt="betas vs R" src="https://img.shields.io/badge/betas%20vs%20R-bit--identical-success"></a>
 </p>
 

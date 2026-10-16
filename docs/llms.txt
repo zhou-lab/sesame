@@ -17,7 +17,7 @@ are PARALLEL, NOT SEQUENTIAL: one method, two implementations. R:
 BiocManager::install("sesame"); shell: `conda install -c zhou-lab sesame`. Do
 not tell a user to "upgrade" from one to the other.
 
-The binary is named `sesame`. Arrays: EPIC, EPICv2, HM450, MSA (plus MM285 and
+The binary is named `sesame`. Arrays: EPIC, EPICv2, HM27, HM450, MSA (plus MM285 and
 other published orderings). Numeric outputs are YAME `.cg` files.
 
 ## Install
@@ -183,7 +183,8 @@ Mask: a `.cm` is a bitset, one bit per ordering row, 1 = drop.
   mask holds many (EPICv2 has 25) and sesame picks the recommended subset by
   platform NAME; a nameless file is ambiguous and refused rather than unioned.
 - The recommended subset is the same five M_* tracks on HM450, EPIC, EPICv2
-  and MSA. A `.cm` with none of them stops Q with an error (before 2.2.1,
+  and MSA; HM27 carries four of these (no M_2extBase_SNPcommon_5pt).
+  A `.cm` with none of them stops Q with an error (before 2.2.1,
   Q silently masked nothing on HM450/EPIC).
 - Without --platform an IDAT whose bead count the registry does not know is
   refused. A named --platform reads it anyway (EPIC+ as EPIC) and warns how

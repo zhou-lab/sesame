@@ -134,7 +134,7 @@ asan: clean
 	$(MAKE) EXTRA_CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
 	        EXTRA_LDFLAGS="-fsanitize=address,undefined"
 
-test: test-errors test-platform test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify test-docs-check
+test: test-errors test-platform test-hm27 test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify test-docs-check
 
 # --- the slow drivers, split one target per platform -------------------------
 #
@@ -241,6 +241,10 @@ test-errors: $(BIN) mu2cg
 # warning (EPIC+ as EPIC); without --platform still refused. Real IDATs.
 test-platform: $(BIN)
 	@tests/run_platform.sh
+
+.PHONY: test-hm27
+test-hm27: $(BIN)
+	@python3 tests/run_hm27.py
 
 test-idat: $(BIN)
 	@tests/run_golden.sh

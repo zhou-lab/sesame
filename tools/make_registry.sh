@@ -29,17 +29,20 @@ lib=${YAME_DIR:-YAME}/tools/registry/lib.sh
 out=${2:-/dev/stdout}
 [ "${1:-}" = "-o" ] || out=/dev/stdout
 
-PLATFORMS="EPIC EPICv2 HM450 MSA"
+PLATFORMS="EPIC EPICv2 HM27 HM450 MSA"
 GENOMES="hg38 mm10 mm39"
 
 ## The IDAT bead count (nSNPsRead) per product, which is how preprocess
 ## auto-detects a platform from an IDAT alone. A sesame-only fact: it lived in
 ## YAME's catalog only while YAME emitted this header. Re-derive by reading any
 ## IDAT of that product -- `sesame idat-dump <file>` prints the count.
+## HM27's 55,300 addresses also equal the distinct non-NA M/U addresses in
+## InfiniumAnnotation v8.3's HM27.ordering.tsv.gz (27,577 CpGs + controls).
 beads_of() {
   case $1 in
     EPIC)   echo 1051815 ;;
     EPICv2) echo 1105209 ;;
+    HM27)   echo   55300 ;;
     HM450)  echo  622399 ;;
     MSA)    echo  384497 ;;
     *)      echo 0 ;;
