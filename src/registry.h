@@ -19,6 +19,7 @@ typedef struct {
 static const sesame_reg_t SESAME_REGISTRY[] = {
     { "EPIC", 1051815, "EPIC.ordering.tsv.gz", "v8.5" },
     { "EPICv2", 1105209, "EPICv2.ordering.tsv.gz", "v8.5" },
+    { "HM27", 55300, "HM27.ordering.tsv.gz", "v8.5" },
     { "HM450", 622399, "HM450.ordering.tsv.gz", "v8.5" },
     { "MSA", 384497, "MSA.ordering.tsv.gz", "v8.5" },
     { NULL, 0, NULL, NULL }
@@ -57,6 +58,12 @@ static const yame_asset_file_t SESAME_FILES[] = {
     { "zhou-lab/InfiniumAnnotation@v8.5:EPICv2/EPICv2.cnvnormals.cg", "EPICv2/EPICv2.cnvnormals.cg", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/EPICv2/EPICv2.cnvnormals.cg", "2706716a1d84d2bcd9933922a615cee8efdea91f17be47148e333a2853dee9d4", 9206163, "", "", "", "" },
     { "zhou-lab/InfiniumAnnotation@v8.5:EPICv2/EPICv2.cnvnormals.cg.idx", "EPICv2/EPICv2.cnvnormals.cg.idx", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/EPICv2/EPICv2.cnvnormals.cg.idx", "4387cef3f8f6604bdda6fcdbdeeeaa7d5784d0cdc50039a24cc32bd5b8e16b71", 71, "", "", "", "" },
     { "zhou-lab/InfiniumAnnotation@v8.5:EPICv2/EPICv2.titration.tsv.gz", "EPICv2/EPICv2.titration.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/EPICv2/EPICv2.titration.tsv.gz", "a07ccecac3c87d703547f34ee38a4bf41bd8b0fe8dd31b69d253634318ee94be", 6712468, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.5:HM27/HM27.ordering.tsv.gz", "HM27/HM27.ordering.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM27/HM27.ordering.tsv.gz", "459ac2ff896f962a72ad0c95f4fb080c8dd2a246c96b81c6221c38fbf5580f5a", 305537, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.5:HM27/HM27.hg38.coord.tsv.gz", "HM27/HM27.hg38.coord.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM27/HM27.hg38.coord.tsv.gz", "c3a722258116011af07e35e072c97676236df8d53eb73d54c89bc092c8f13f9f", 173651, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.5:HM27/HM27.hg38.snp.tsv.gz", "HM27/HM27.hg38.snp.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM27/HM27.hg38.snp.tsv.gz", "4f8ed780cff0a00a52fc5238f27f67e5faa2b3c89cbd2f6c8cd9ce3aad83553e", 358753, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.5:HM27/HM27.typeI_ext.tsv.gz", "HM27/HM27.typeI_ext.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM27/HM27.typeI_ext.tsv.gz", "092797d933639b5e4a48a73bef95be12bd9161b1a45582bbf03de3d33837a0b2", 3432, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.5:HM27/HM27.hg38.mask.cm", "HM27/HM27.hg38.mask.cm", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM27/HM27.hg38.mask.cm", "9b70bb7dc8393219a5a7cdc95b558532bb0382dbb311c01fcc8056bc6e99f8c1", 7969, "", "", "", "" },
+    { "zhou-lab/InfiniumAnnotation@v8.5:HM27/HM27.hg38.mask.cm.idx", "HM27/HM27.hg38.mask.cm.idx", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM27/HM27.hg38.mask.cm.idx", "4a176255774d68ce1e687c1b2e3a71f4f1a6164445d950acb5c9472ca54cdfc4", 466, "", "", "", "" },
     { "zhou-lab/InfiniumAnnotation@v8.5:HM450/HM450.ordering.tsv.gz", "HM450/HM450.ordering.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM450/HM450.ordering.tsv.gz", "e659fe9983df66a20eacff97b98dd08e225963cead5d512d11d6c38a7e9136f6", 4583258, "", "", "", "" },
     { "zhou-lab/InfiniumAnnotation@v8.5:HM450/HM450.hg38.coord.tsv.gz", "HM450/HM450.hg38.coord.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM450/HM450.hg38.coord.tsv.gz", "bedd968a41a2f287e18d94c86f34d46fd640086bd3c43639bd0a878ea64f3a40", 3064215, "", "", "", "" },
     { "zhou-lab/InfiniumAnnotation@v8.5:HM450/HM450.hg38.snp.tsv.gz", "HM450/HM450.hg38.snp.tsv.gz", "https://raw.githubusercontent.com/zhou-lab/InfiniumAnnotation/v8.5/HM450/HM450.hg38.snp.tsv.gz", "3ad6d0226b9dc928f65ed028a6bca59d91a53a6803e66e4645a8f97cd42f5a7e", 1697522, "", "", "", "" },
