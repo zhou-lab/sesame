@@ -550,7 +550,9 @@ int sesame_prep_dye_bias_nl(sesame_sigdf_t *s, sesame_err_t *err)
     if (!s) return sesame__fail(err, SESAME_ERR_IO, "null sigdf");
     n = s->n;
 
-    tbuf = (double *)malloc((size_t)n * sizeof(double));
+    /* 2n: the Inf-I pools hold M and U of every probe in a channel, which
+     * exceeds n on an all-Inf-I array (HM27) */
+    tbuf = (double *)malloc((size_t)n * 2 * sizeof(double));
     if (!tbuf) return sesame__fail(err, SESAME_ERR_NOMEM, "oom in D step");
 
     /* Guard: green channel failed completely -> mask Inf-I green and stop

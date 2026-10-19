@@ -2,7 +2,7 @@
 ## method is called. The GitHub repo stays sesame-cli, so home/dev_url below
 ## are unchanged; only the installable name differs.
 {% set name = "sesame" %}
-{% set version = "2.2.2" %}
+{% set version = "2.3.0" %}
 
 package:
   name: {{ name }}
@@ -50,7 +50,7 @@ requirements:
     # whose registry carries the CNV normal panels that `cnv` reads, and v1.57
     # the first with `rowsub -w/-M`, which the describe-probe --genome pipeline
     # in our own docs pipes into.
-    - yame >=1.59
+    - yame >=1.61
 
 test:
   commands:
@@ -73,7 +73,8 @@ about:
     inferInfiniumIChannel, dyeBiasNL, pOOBAH, noob), and emit betas as YAME
     .cg files. It also computes the sesameQC panel, per-probe differential
     methylation (DML), and copy-number segmentation (log2 ratios, genome bins,
-    and circular binary segmentation). The IDAT reader and un-preprocessed betas
+    and circular binary segmentation), and calibrates betas to modification
+    fractions against titration standards. The IDAT reader and un-preprocessed betas
     are bit-identical to the R package; other steps match to documented
     tolerances (see NUMERICS.md). Platform annotations come from the shared
     store filled by `yame fetch`; sesame itself never touches the network.

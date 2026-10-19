@@ -924,6 +924,36 @@ Usage:
   --max-neighbors N up to N nearest neighbours (default 3)
   --max-dist BP     search window in bp (default 10000)</code></pre>
   </details>
+  <details class="ref" id="ref-calibrate">
+    <summary><code class="inl">sesame calibrate</code> <span class="m">— betas -&gt; modification fraction (titration standards)</span></summary>
+    <pre class="help"><code>
+Usage:
+  sesame calibrate (--platform P | --table FILE) [options] &lt;in.cg&gt; &lt;out.cg&gt;
+
+  Map betas to a modification fraction with the platform's titration
+  standards. Per probe, (floor, top, rho) from the 0..100 % standards:
+  b' = (beta - floor) / max(top - floor, 0.05),
+  f = b' / (b' + rho^gamma (1 - b')), clamped to [0, 1]. NA where the
+  probe has no complete standard series. For global levels (e.g.
+  bACE 5hmC background); locus-level work wants sequencing.
+
+Options:
+  --platform P      EPICv2 | MSA (| MM285): the store's
+                    &lt;P&gt;/&lt;P&gt;.titration.tsv.gz
+  --table FILE      a titration table instead (floor, top, rho;
+                    positional to the beta.cg)
+  --gamma G         nonlinearity exponent (default 0.15, fitted on
+                    EPICv2 bACE 5hmC vs ACE-seq only; provisional
+                    on MSA/MM285. A BS 5modC array goes through the
+                    same curve and moves ~1.5 points: harmless, but
+                    it was not fitted for it)
+
+Notes:
+  Input is a preprocess beta.cg (QCDPB, the prep the standards had).
+  Per sample, the log gives the share of probes clamped to 0 (beta at
+  or below the probe's 0 % standard) -- ~40 % on bACE arrays, the
+  method's known weak spot.</code></pre>
+  </details>
 </section>
 <section class="card">
   <h2>Inspect / convert</h2>
@@ -1019,8 +1049,8 @@ Notes:
   <h2>Other</h2>
   <details class="ref" id="ref-version">
     <summary><code class="inl">sesame version</code> <span class="m">— version, the yame it links, the store</span></summary>
-    <pre class="help"><code>sesame 2.2.2
-    built against  YAME v1.59
+    <pre class="help"><code>sesame 2.3.0
+    built against  YAME v1.61
     store          /home/user/.local/share/yame   ($YAME_DATA_HOME unset; yame fetch fills it)</code></pre>
   </details>
 </section>

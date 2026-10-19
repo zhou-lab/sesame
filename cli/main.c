@@ -108,6 +108,7 @@ static int usage(void)
     cmd_row("region",    "a region's betas as long-form TSV, for plotting");
     cmd_row("mliftover", "lift a .cg/.cm across arrays, or to/from a genome (hg38)");
     cmd_row("impute",    "fill missing betas (matrix mean or genomic neighbours)");
+    cmd_row("calibrate", "betas -> modification fraction (titration standards)");
 
     fprintf(stderr, "\n%sInspect / convert%s\n", H_TITLE, H_OFF);
     cmd_row("describe-probe", "probe IDs for a positional file, or their coordinates");
@@ -349,6 +350,36 @@ static int usage_impute(void)
     return 1;
 }
 
+static int usage_calibrate(void)
+{
+    yame_usage_head("sesame calibrate (--platform P | --table FILE) [options] <in.cg> <out.cg>");
+    fputs("\n", stderr);
+    yame_usage_text("Map betas to a modification fraction with the platform's titration");
+    yame_usage_text("standards. Per probe, (floor, top, rho) from the 0..100 % standards:");
+    yame_usage_text("b' = (beta - floor) / max(top - floor, 0.05),");
+    yame_usage_text("f = b' / (b' + rho^gamma (1 - b')), clamped to [0, 1]. NA where the");
+    yame_usage_text("probe has no complete standard series. For global levels (e.g.");
+    yame_usage_text("bACE 5hmC background); locus-level work wants sequencing.");
+
+    yame_usage_sec("Options:");
+    yame_usage_opt("--platform P", "EPICv2 | MSA (| MM285): the store's");
+    yame_usage_cont("<P>/<P>.titration.tsv.gz");
+    yame_usage_opt("--table FILE", "a titration table instead (floor, top, rho;");
+    yame_usage_cont("positional to the beta.cg)");
+    yame_usage_opt("--gamma G", "nonlinearity exponent (default 0.15, fitted on");
+    yame_usage_cont("EPICv2 bACE 5hmC vs ACE-seq only; provisional");
+    yame_usage_cont("on MSA/MM285. A BS 5modC array goes through the");
+    yame_usage_cont("same curve and moves ~1.5 points: harmless, but");
+    yame_usage_cont("it was not fitted for it)");
+
+    yame_usage_sec("Notes:");
+    yame_usage_text("Input is a preprocess beta.cg (QCDPB, the prep the standards had).");
+    yame_usage_text("Per sample, the log gives the share of probes clamped to 0 (beta at");
+    yame_usage_text("or below the probe's 0 % standard) -- ~40 % on bACE arrays, the");
+    yame_usage_text("method's known weak spot.");
+    return 1;
+}
+
 static int usage_describe(void)
 {
     yame_usage_head("sesame describe-probe [options] <file>");
@@ -446,6 +477,7 @@ static int route_usage(const char *cmd)
     if (!strcmp(cmd, "region"))       return usage_region();
     if (!strcmp(cmd, "mliftover"))    return usage_liftover();
     if (!strcmp(cmd, "impute"))       return usage_impute();
+    if (!strcmp(cmd, "calibrate"))    return usage_calibrate();
     if (!strcmp(cmd, "deidentify")) return usage_deidentify();
     if (!strcmp(cmd, "describe-probe") ||
         !strcmp(cmd, "attach-probe"))  return usage_describe();
@@ -1909,6 +1941,77 @@ out:
     return rc;
 }
 
+static int cmd_calibrate(int argc, char **argv)
+{
+    const char *inpath = NULL, *outpath = NULL, *platform = NULL, *table = NULL;
+    double gamma = 0.15;
+    char tbuf[4096], *end;
+    double *mat = NULL; char **names = NULL;
+    int32_t nprobe = 0, nsamp = 0, nfit, *ncal = NULL, *nzero = NULL;
+    sesame_titration_t t = { NULL, NULL, NULL, 0 };
+    sesame_err_t e;
+    int i, rc = 1;
+
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--platform") == 0 && i+1 < argc) platform = argv[++i];
+        else if (strcmp(argv[i], "--table") == 0 && i+1 < argc) table = argv[++i];
+        else if (strcmp(argv[i], "--gamma") == 0 && i+1 < argc) {
+            gamma = strtod(argv[++i], &end);
+            if (*end || gamma < 0 || gamma > 1) {
+                fprintf(stderr, "sesame: --gamma must be a number in [0, 1]\n");
+                return 1;
+            }
+        }
+        else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) { usage_calibrate(); return 0; }
+        else if (argv[i][0] == '-' && argv[i][1] != '\0') { fprintf(stderr, "sesame: unknown option %s\n", argv[i]); return usage_calibrate(); }
+        else if (!inpath) inpath = argv[i];
+        else if (!outpath) outpath = argv[i];
+        else { fprintf(stderr, "sesame: calibrate takes <in.cg> <out.cg>\n"); return usage_calibrate(); }
+    }
+    if (!inpath || !outpath || (!platform && !table)) {
+        fprintf(stderr, "sesame: calibrate needs --platform or --table, <in.cg> and <out.cg>\n");
+        return usage_calibrate();
+    }
+    if (!table) {
+        char tfile[256];
+        snprintf(tfile, sizeof tfile, "%s.titration.tsv.gz", platform);
+        if (sesame_asset_locate(platform, tfile, tbuf, sizeof tbuf) != 0) {
+            char help[1024];
+            sesame_asset_missing_help(platform, tfile, help, sizeof help);
+            fprintf(stderr, "sesame: %s\n", help); return 1;
+        }
+        table = tbuf;
+    }
+
+    if (sesame_read_cg(inpath, &mat, &nprobe, &nsamp, &names, &e) != SESAME_OK) {
+        fprintf(stderr, "sesame: %s\n", e.msg); return 1; }
+    if (sesame_titration_load(table, nprobe, &t, &e) != SESAME_OK) {
+        fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
+    if (!(ncal = (int32_t *)malloc((size_t)nsamp * sizeof(int32_t))) ||
+        !(nzero = (int32_t *)malloc((size_t)nsamp * sizeof(int32_t)))) {
+        fprintf(stderr, "sesame: oom\n"); goto out; }
+    nfit = sesame_titration_apply(mat, nprobe, nsamp, &t, gamma, ncal, nzero);
+    if (sesame_write_cg(outpath, mat, nprobe, nsamp, names, &e) != SESAME_OK) {
+        fprintf(stderr, "sesame: %s\n", e.msg); goto out; }
+    /* the known weak spot, per sample: betas at or below the probe's 0 %
+     * standard all become 0 (~40 % on bACE 5hmC arrays) */
+    for (i = 0; i < nsamp; i++)
+        fprintf(stderr, "sesame: %s: %d of %d calibrated probes (%.1f%%) "
+                "clamped to 0 (beta at or below the probe's 0%% standard)\n",
+                names && names[i] ? names[i] : "sample", nzero[i], ncal[i],
+                ncal[i] ? 100.0 * nzero[i] / ncal[i] : 0.0);
+    fprintf(stderr, "sesame: calibrated %d sample(s) x %d probes (gamma %g; %d "
+            "probes have a titration fit, the rest are NA) to %s\n",
+            nsamp, nprobe, gamma, nfit, outpath);
+    rc = 0;
+out:
+    sesame_titration_free(&t);
+    free(ncal); free(nzero);
+    free(mat);
+    if (names) { for (i = 0; i < nsamp; i++) free(names[i]); free(names); }
+    return rc;
+}
+
 /* Infer a platform from a filename like "MSA.hg38.coord.tsv.gz" -> "MSA". Returns
  * a static registry string, or NULL. */
 static const char *platform_from_basename(const char *path)
@@ -2245,6 +2348,8 @@ int main(int argc, char **argv)
         return cmd_liftover(argc - 2, argv + 2);
     if (strcmp(argv[1], "impute") == 0)
         return cmd_impute(argc - 2, argv + 2);
+    if (strcmp(argv[1], "calibrate") == 0)
+        return cmd_calibrate(argc - 2, argv + 2);
     if (strcmp(argv[1], "describe-probe") == 0)
         return cmd_describe_probe(argc - 2, argv + 2);
     /* Hidden alias, kept because scripts have it. Warns rather than silently

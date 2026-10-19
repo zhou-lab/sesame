@@ -89,6 +89,8 @@ exact `yame fetch` to run — sesame never downloads and never prompts.
   vcf           rs probes -> sites-only VCF (formatVCF)
   mliftover     .cg/.cm across arrays, or to/from a genome (hg38) by coordinate
   impute        fill NA betas (--method mean|neighbors)
+  calibrate     betas -> modification fraction, from the platform's
+                titration standards (EPICv2, MSA, MM285; --gamma)
   region        <chr:beg-end> or --gene NAME -> long-form betas TSV
   deidentify    zero or reversibly scramble SNP beads in an IDAT
   describe-probe  label a positional .cg/.cm/.tsv with Probe_IDs, or
