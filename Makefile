@@ -81,9 +81,11 @@ install: $(BIN)
 	cp -f $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
 	chmod 755 $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
-# Incrementally (re)build libyame.a from the checked-out submodule.
+# Incrementally (re)build libyame.a from the checked-out submodule, and the
+# yame binary the store-free test drivers call (YAME/yame); without it they
+# SKIP in a fresh checkout and in CI.
 yame-lib:
-	$(MAKE) -C $(YAME_DIR) lib
+	$(MAKE) -C $(YAME_DIR) lib yame
 $(YAME_LIB) $(HTSLIB) $(YAME_DIR)/yame-config: yame-lib
 
 $(BIN): $(OBJ) $(CLI_OBJ) $(YAME_LIB) $(HTSLIB)
