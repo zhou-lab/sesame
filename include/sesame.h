@@ -418,6 +418,28 @@ int sesame_liftover_apply(const char *in_cx, const char *out_cx,
 int sesame_impute_mean(double *mat, int32_t nprobe, int32_t nsamp, int axis,
                        sesame_err_t *err);
 
+/* Titration calibration (src/calibrate.c): beta -> modification fraction from
+ * the per-probe methylation-standard response in <PLAT>.titration.tsv.gz
+ * (columns floor, top, rho; positional to the ordering). amp is stored as
+ * max(top - floor, 0.05); NA rows hold NaN. */
+typedef struct {
+    double  *floor, *amp, *rho;
+    int32_t  n;
+} sesame_titration_t;
+
+int  sesame_titration_load(const char *path, int32_t nprobe,
+                           sesame_titration_t *out, sesame_err_t *err);
+void sesame_titration_free(sesame_titration_t *t);
+/* In place on a sample-major [nsamp*nprobe] beta matrix:
+ * b' = (beta - floor)/amp, f = b'/(b' + rho^gamma (1 - b')), clamped to
+ * [0,1]; NaN where the beta or the probe's fit is missing. Returns the number
+ * of probes with a fit. If non-NULL, ncal[j] / nzero[j] get sample j's count
+ * of calibrated probes and of those clamped to 0 (beta at or below the
+ * probe's 0 % standard). */
+int32_t sesame_titration_apply(double *mat, int32_t nprobe, int32_t nsamp,
+                               const sesame_titration_t *t, double gamma,
+                               int32_t *ncal, int32_t *nzero);
+
 /* imputeBetasByGenomicNeighbors (R/impute.R): fill each missing probe's NaN with
  * the mean of up to max_neighbors nearest non-missing probes within max_dist bp,
  * searched 5'->3' along the probe's strand (per R's start-anchored strand-aware

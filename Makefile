@@ -56,13 +56,13 @@ YAME_INC := -I$(YAME_DIR)/src -I$(YAME_DIR)/htslib
 # exists rather than when make parses this file.
 YAME_LIBS := $$($(YAME_DIR)/yame-config --libs)
 
-SRC     := src/util.c src/numerics.c src/idat.c src/index.c src/sigdf.c src/prep.c src/qc.c src/dml.c src/cnv.c src/cbs.c src/vcf.c src/region.c src/collapse.c src/liftover.c src/impute.c src/deidentify.c src/mask.c src/cgwrite.c src/describe.c src/cache.c
+SRC     := src/util.c src/numerics.c src/idat.c src/index.c src/sigdf.c src/prep.c src/qc.c src/dml.c src/cnv.c src/cbs.c src/vcf.c src/region.c src/collapse.c src/liftover.c src/impute.c src/calibrate.c src/deidentify.c src/mask.c src/cgwrite.c src/describe.c src/cache.c
 CLI_SRC := cli/main.c
 OBJ     := $(SRC:.c=.o)
 CLI_OBJ := $(CLI_SRC:.c=.o)
 BIN     := sesame
 
-.PHONY: test-platform test-qcdpb-HM450 test-qcdpb-EPIC test-qcdpb-EPICv2 test-qcdpb-MSA test-qcdpb test-betas-HM450 test-betas-EPIC test-betas-EPICv2 test-betas-MSA test-prep-HM450 test-prep-EPIC test-prep-EPICv2 test-prep-MSA test-pneg-HM450 test-pneg-EPIC test-pneg-EPICv2 test-pneg-MSA test-dyebiasL-HM450 test-dyebiasL-EPIC test-dyebiasL-EPICv2 test-dyebiasL-MSA test-gct-HM450 test-gct-EPIC test-gct-EPICv2 test-gct-MSA test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome test-liftover-formats all asan docs test test-docs test-docs-check test-errors test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify gate index cnv-normals registry yame-lib install fuzz fuzz-replay clean
+.PHONY: test-calibrate test-platform test-qcdpb-HM450 test-qcdpb-EPIC test-qcdpb-EPICv2 test-qcdpb-MSA test-qcdpb test-betas-HM450 test-betas-EPIC test-betas-EPICv2 test-betas-MSA test-prep-HM450 test-prep-EPIC test-prep-EPICv2 test-prep-MSA test-pneg-HM450 test-pneg-EPIC test-pneg-EPICv2 test-pneg-MSA test-dyebiasL-HM450 test-dyebiasL-EPIC test-dyebiasL-EPICv2 test-dyebiasL-MSA test-gct-HM450 test-gct-EPIC test-gct-EPICv2 test-gct-MSA test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome test-liftover-formats all asan docs test test-docs test-docs-check test-errors test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify gate index cnv-normals registry yame-lib install fuzz fuzz-replay clean
 
 all: $(BIN)
 
@@ -134,7 +134,7 @@ asan: clean
 	$(MAKE) EXTRA_CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
 	        EXTRA_LDFLAGS="-fsanitize=address,undefined"
 
-test: test-errors test-platform test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify test-docs-check
+test: test-errors test-platform test-calibrate test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify test-docs-check
 
 # --- the slow drivers, split one target per platform -------------------------
 #
@@ -241,6 +241,11 @@ test-errors: $(BIN) mu2cg
 # warning (EPIC+ as EPIC); without --platform still refused. Real IDATs.
 test-platform: $(BIN)
 	@tests/run_platform.sh
+
+# sesame calibrate: the titration inversion against the formula on a
+# hand-made table, plus its refusals. No store, no IDATs -- runs in CI.
+test-calibrate: $(BIN)
+	@tests/run_calibrate.sh
 
 test-idat: $(BIN)
 	@tests/run_golden.sh
