@@ -271,6 +271,8 @@ cd sesame &amp;&amp; make
 <span class="cm"># -y is required off a terminal; it refuses without</span>
 yame <span class="sub">fetch</span> -y EPICv2
 yame <span class="sub">fetch</span> -y hg38
+<span class="cm"># the other arrays, for the HM450, EPIC and MSA examples</span>
+yame <span class="sub">fetch</span> -y HM450 EPIC MSA
 
 <span class="cm"># a name is that directory's own files. -R adds everything</span>
 <span class="cm"># beneath it (hg38/KYCG, hg38/models: 5.2 GB, mostly not</span>
@@ -284,10 +286,13 @@ yame <span class="sub">fetch</span> -y hg38
 ├ EPICv2.hg38.coord.tsv.gz
 ├ EPICv2.hg38.snp.tsv.gz
 ├ EPICv2.typeI_ext.tsv.gz
+├ EPICv2.cnvnormals.cg(+.idx)  <span class="cm"># cnv's panel</span>
+├ EPICv2.titration.tsv.gz
 └ SHA256SUMS
 hg38/  <span class="cm"># genome tracks</span>
 ├ seqinfo.tsv.gz  gaps.tsv.gz
 ├ cytoband.tsv.gz  genes.bed.gz(+.tbi)
+├ cpg_nocontig.cr  <span class="cm"># CpG universe, for mliftover</span>
 └ SHA256SUMS</code></pre>
   </section>
 
@@ -326,7 +331,7 @@ sampleB   0.994    0.995       1.00</code></pre>
         <img src="figures/beta_density.png" alt="Bimodal distribution of GM12878 beta values">
         <button class="zoom" type="button" data-full="figures/beta_density.png" title="expand">⤢</button>
         <div class="code"><pre><code><span class="cm"># betas -> a 1-D density (bimodal)</span>
-yame unpack beta.cg | cinderplot --no-header \
+yame unpack out/beta.cg | cinderplot --no-header \
   'aes(V1) + geom_density()
    + theme_minimal() + labs(x="beta")' beta_density.png</code></pre></div>
       </div>
@@ -420,14 +425,12 @@ cinderplot 'qc/ib.tsv + aes(x, y, colour=density) + geom_point(size=0.7)
   <section class="card">
     <h2>Differential methylation <span class="m">— dml</span></h2>
     <p>Per-probe OLS with t/F tests + BH, matching R's <code class="inl">lm</code> to ~1e-9.</p>
-    <p><code class="inl">dml</code> is the one command that takes no
-      <code class="inl">--platform</code>: a <code class="inl">.cg</code> is
-      positional, so it needs the ordering itself, by path
-      (<code class="inl">$STORE</code> = <code class="inl">$YAME_DATA_HOME</code>).
-      It still prints a deprecation notice for <code class="inl">--index</code>,
-      which is the only flag it has — the rename has not reached it.</p>
+    <p>A <code class="inl">.cg</code> is positional, so
+      <code class="inl">--platform</code> supplies its Probe_IDs: a name from
+      the store, or the path to an ordering. A Probe_ID × sample matrix TSV
+      needs neither.</p>
     <pre><code>sesame <a class="sub" href="#ref-dml">dml</a> --betas out/beta.cg \
-  --index $STORE/EPICv2/EPICv2.ordering.tsv.gz \
+  --platform EPICv2 \
   --meta samples.tsv \
   --formula '~ group + age' &gt; dml.tsv</code></pre>
   </section>
@@ -436,7 +439,9 @@ cinderplot 'qc/ib.tsv + aes(x, y, colour=density) + geom_point(size=0.7)
     <h2>De-identify <span class="m">— deidentify</span></h2>
     <p>Strip the genetic fingerprint: zero (or reversibly scramble) the SNP
       (<code class="inl">rs</code>) probe intensities in an IDAT — every other bead
-      is byte-identical, so betas are unchanged except the SNPs.</p>
+      is byte-identical. Raw betas are unchanged except the SNPs; dye-bias
+      correction and noob read whole-array statistics, so they shift the
+      rest by under 1e-3.</p>
     <pre><code><span class="cm"># zero SNP beads (a prefix does both channels)</span>
 sesame <a class="sub" href="#ref-deidentify">deidentify</a> sample_prefix
 
@@ -452,23 +457,29 @@ sesame <a class="sub" href="#ref-deidentify">deidentify</a> -r --seed 42 s_noid.
   --output total_intensity --out t/ tumor
 sesame <a class="sub" href="#ref-cnv">cnv</a> --platform EPICv2 \
   t/total_intensity.cg segments.tsv bins.tsv
-<span class="cm"># --probes: per-probe; --exclude chrY</span></code></pre>
+<span class="cm"># --probes: per-probe</span>
+<span class="cm"># --exclude chrX,chrY: drop the sex chromosomes</span></code></pre>
     <p style="margin-top:11px">The normal panel ships with the annotation
       (<code class="inl">&lt;P&gt;.cnvnormals.cg</code>, v8.2+), so
-      <code class="inl">yame fetch</code> brings it; <code class="inl">--normals</code>
-      points at your own instead.</p>
+      <code class="inl">yame fetch</code> brings it. The shipped panel is two
+      arrays of one female cell line, GM12878. So pass
+      <code class="inl">--exclude chrX,chrY</code>, or point
+      <code class="inl">--normals</code> at a sex-matched panel of your own;
+      otherwise a male sample's chrY dominates the plot.</p>
     <figure>
       <div class="shot" tabindex="0">
         <img src="figures/cnv_k562.png" alt="K562 copy-number profile from sesame <a class="sub" href="#ref-cnv">cnv</a>">
         <button class="zoom" type="button" data-full="figures/cnv_k562.png" title="expand">⤢</button>
-        <div class="code"><pre><code><span class="cm"># plot the two files with cinderplot</span>
-cinderplot 'out/bins.tsv
+        <div class="code"><pre><code><span class="cm"># plot the two files with cinderplot; it reads</span>
+<span class="cm"># genome tracks by path, so name the store</span>
+STORE=${YAME_DATA_HOME:-$HOME/.local/share/yame}
+cinderplot 'bins.tsv
   + aes(chrom=chrom, x=start, xend=end, y=log2ratio, colour=log2ratio)
   + geom_point(size=.5)
-  + geom_segment(data="out/segments.tsv", y=seg.mean, color="black")
-  + scale_x_genome("hg38/seqinfo.tsv.gz")
+  + geom_segment(data="segments.tsv", y=seg.mean, color="black")
+  + scale_x_genome("'"$STORE"'/hg38/seqinfo.tsv.gz")
   + scale_colour_gradient2(low="#762a83", high="#b2182b")
-  + ideogram("hg38/cytoband.tsv.gz")' cnv_k562.png</code></pre></div>
+  + ideogram("'"$STORE"'/hg38/cytoband.tsv.gz")' cnv_k562.png</code></pre></div>
       </div>
       <figcaption>K562 (EPICv2/hg38): chr9p deletion, chr13/22 amps.</figcaption>
     </figure>
@@ -492,11 +503,12 @@ cinderplot 'out/bins.tsv
       <div class="shot" tabindex="0">
         <img src="figures/region_dnmt3a.png" alt="DNMT3A methylation on a probe-anchored heatmap">
         <button class="zoom" type="button" data-full="figures/region_dnmt3a.png" title="expand">⤢</button>
-        <div class="code"><pre><code>sesame <a class="sub" href="#ref-region">region</a> <span class="cm">--gene DNMT3A</span> --pad 2000 \
+        <div class="code"><pre><code>STORE=${YAME_DATA_HOME:-$HOME/.local/share/yame}
+sesame <a class="sub" href="#ref-region">region</a> <span class="cm">--gene DNMT3A</span> --pad 2000 \
   --betas cohort.beta.cg --platform EPICv2 \
 | cinderplot 'region()
-  + cytoband("hg38/cytoband.tsv.gz", height=.5)
-  + genes("hg38/genes.bed.gz", height=1.5)
+  + cytoband("'"$STORE"'/hg38/cytoband.tsv.gz", height=.5)
+  + genes("'"$STORE"'/hg38/genes.bed.gz", height=1.5)
   + matrix(-, cluster=samples, rownames=off)' dnmt3a.png</code></pre></div>
       </div>
       <figcaption><b>--gene DNMT3A</b> — gene models + probe-anchored heatmap.</figcaption>
@@ -505,9 +517,12 @@ cinderplot 'out/bins.tsv
       <div class="shot" tabindex="0">
         <img src="figures/region_hoxa.png" alt="HOXA cluster methylation on a probe-anchored heatmap">
         <button class="zoom" type="button" data-full="figures/region_hoxa.png" title="expand">⤢</button>
-        <div class="code"><pre><code>sesame <a class="sub" href="#ref-region">region</a> <span class="cm">chr7:27,090,000-27,210,000</span> \
+        <div class="code"><pre><code>STORE=${YAME_DATA_HOME:-$HOME/.local/share/yame}
+sesame <a class="sub" href="#ref-region">region</a> <span class="cm">chr7:27,090,000-27,210,000</span> \
   --betas cohort.beta.cg --platform EPICv2 \
-| cinderplot 'region()+genes()+matrix(-)' hoxa.png</code></pre></div>
+| cinderplot 'region()
+  + genes("'"$STORE"'/hg38/genes.bed.gz")
+  + matrix(-)' hoxa.png</code></pre></div>
       </div>
       <figcaption><b>chr:beg-end</b> — the HOXA cluster.</figcaption>
     </figure>
@@ -521,18 +536,18 @@ cinderplot 'out/bins.tsv
       each with what differs, why, and the measurement that settled it.</p>
     <p>Most of them are not arithmetic at all: the two programs read
       <b>different annotation</b>. sesame reads the store
-      (InfiniumAnnotation v8.1); R reads the copy inside
+      (InfiniumAnnotation v8.5); R reads the copy inside
       <code class="inl">sesameData</code>. Where those disagree — 22 EPICv2 SNP
       probes whose colour channel differs, 635 EPIC control probes named
       <code class="inl">ctl_10609447_NEGATIVE</code> here and
       <code class="inl">ctl_10609447</code> there — the newer annotation is the
       one this build is correct against.</p>
-    <pre><code><span class="cm"># the tests grade against frozen values, not a live R</span>
+    <pre><code><span class="cm"># with no R, the vcf test grades against frozen values</span>
 tests/truth/vcf.EPICv2.tsv.gz   <span class="cm"># 127,572 rows, 22 C-sourced</span>
-tests/truth/PROVENANCE.tsv      <span class="cm"># R, sesame, sesameData, store</span>
+tests/truth/PROVENANCE.tsv      <span class="cm"># R, sesame, sesameData, annotation</span>
 
 <span class="cm"># regenerating refuses to freeze an unexplained value</span>
-make truth RSCRIPT=Rscript-4.6.0</code></pre>
+make truth RSCRIPT=Rscript</code></pre>
   </section>
 
   <section class="card">
@@ -762,8 +777,11 @@ Usage:
   stdout, one row per probe.
 
 Options:
-  --betas FILE      a preprocess beta.cg (needs --index for Probe_IDs)
-                    or a Probe_ID x sample matrix TSV
+  --betas FILE      a preprocess beta.cg (needs --platform for
+                    Probe_IDs) or a Probe_ID x sample matrix TSV
+  --platform P      EPIC | EPICv2 | HM450 | MSA, or the path to an
+                    ordering file. Supplies Probe_IDs for a .cg.
+  --index FILE      ordering .tsv.gz (overrides --platform)
   --formula '~a+b'  model over --meta columns (categoricals dummied)
   --meta FILE       sample table; first column matches sample names
   --design FILE     numeric design matrix (for interactions), in

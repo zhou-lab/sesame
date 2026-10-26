@@ -62,7 +62,7 @@ OBJ     := $(SRC:.c=.o)
 CLI_OBJ := $(CLI_SRC:.c=.o)
 BIN     := sesame
 
-.PHONY: test-calibrate test-platform test-qcdpb-HM450 test-qcdpb-EPIC test-qcdpb-EPICv2 test-qcdpb-MSA test-qcdpb test-betas-HM450 test-betas-EPIC test-betas-EPICv2 test-betas-MSA test-prep-HM450 test-prep-EPIC test-prep-EPICv2 test-prep-MSA test-pneg-HM450 test-pneg-EPIC test-pneg-EPICv2 test-pneg-MSA test-dyebiasL-HM450 test-dyebiasL-EPIC test-dyebiasL-EPICv2 test-dyebiasL-MSA test-gct-HM450 test-gct-EPIC test-gct-EPICv2 test-gct-MSA test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome test-liftover-formats all asan docs test test-docs test-docs-check test-errors test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify gate index cnv-normals registry yame-lib install fuzz fuzz-replay clean
+.PHONY: test-calibrate test-platform test-qcdpb-HM450 test-qcdpb-EPIC test-qcdpb-EPICv2 test-qcdpb-MSA test-qcdpb test-betas-HM450 test-betas-EPIC test-betas-EPICv2 test-betas-MSA test-prep-HM450 test-prep-EPIC test-prep-EPICv2 test-prep-MSA test-pneg-HM450 test-pneg-EPIC test-pneg-EPICv2 test-pneg-MSA test-dyebiasL-HM450 test-dyebiasL-EPIC test-dyebiasL-EPICv2 test-dyebiasL-MSA test-gct-HM450 test-gct-EPIC test-gct-EPICv2 test-gct-MSA test-liftover-toEPIC test-liftover-toEPICv2 test-liftover-genome test-liftover-formats all asan docs test test-docs test-docs-check test-errors test-idat test-betas test-prep test-qmask test-qcdpb test-poobah test-noob test-dyebiasL test-pneg test-collapse test-liftover test-impute test-gct test-neighbors test-batch test-qc test-dml test-cg test-describe test-cnv test-cbs test-vcf test-deidentify gate truth index cnv-normals registry yame-lib install fuzz fuzz-replay clean
 
 all: $(BIN)
 
@@ -365,6 +365,14 @@ test-deidentify: $(BIN)
 # the R oracle (RSCRIPT=), the test IDATs and a populated $YAME_DATA_HOME.
 gate: $(BIN)
 	scripts/coverage.sh --sbatch --check
+
+# Regenerate the frozen ground truth in tests/truth/ (tests/make_truth.sh):
+# runs sesame and the R oracle side by side and refuses a value that differs
+# for no reason documented in DIVERGENCES.md. Needs the store, the test IDATs
+# and an R with the latest sesame (make truth RSCRIPT=<that Rscript>). Review
+# the diff before committing.
+truth: $(BIN) pipeline_dump
+	RSCRIPT="$(RSCRIPT)" tests/make_truth.sh
 
 # Export ordering tables from sesameData (bootstrap; needs Rscript + sesame).
 PLATFORMS := HM450 EPIC EPICv2 MSA

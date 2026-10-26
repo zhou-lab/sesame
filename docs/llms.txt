@@ -33,7 +33,7 @@ Source build needs a C compiler, make, zlib, libcurl and the bundled YAME
 submodule:
 
   git clone --recurse-submodules https://github.com/zhou-lab/sesame
-  cd sesame-cli && make
+  cd sesame && make
 
 Also put `yame` on PATH. sesame downloads nothing; `yame fetch` is how the
 annotation it reads gets there. `sesame version` prints the sesame version, the
@@ -43,6 +43,7 @@ YAME it was built against, and the store path in use.
 
   yame fetch -y EPICv2      # ordering + mask + coords + snp
   yame fetch -y hg38        # seqinfo, gaps, cytoband, genes (+ the suite's .cr)
+  yame fetch -y HM450 EPIC MSA   # the other arrays, when you use them
 
 `-y` is not optional off a terminal: without it yame prints the plan and
 refuses ("Refusing to fetch N files ... Re-run with -y").
@@ -64,7 +65,8 @@ lookup `<store>/<platform>/<file>` -> `./<file>` runs only then.
 
 Per platform, at `<store>/<P>/`: `<P>.ordering.tsv.gz`,
 `<P>.<genome>.mask.cm(+.idx)`, `<P>.<genome>.coord.tsv.gz`,
-`<P>.<genome>.snp.tsv.gz`, `<P>.typeI_ext.tsv.gz`, `SHA256SUMS`. Genome tracks
+`<P>.<genome>.snp.tsv.gz`, `<P>.typeI_ext.tsv.gz`, `<P>.cnvnormals.cg(+.idx)`,
+`<P>.titration.tsv.gz` (where shipped), `SHA256SUMS`. Genome tracks
 land at `<store>/<build>/`. From yame v1.50 the fetch address IS the store
 path, and a directory address is that directory's own files: `yame fetch -y
 hg38` is the genome directory, which also carries the suite's ~30 MB
@@ -75,7 +77,9 @@ the store path.
 Downloads are digest-verified; `shasum -a 256 -c SHA256SUMS` re-checks by hand.
 
 The CNV normal panel `<P>.cnvnormals.cg` ships in the same release (v8.2+)
-and `cnv` finds it in the store; `cnv --normals` overrides it.
+and `cnv` finds it in the store; `cnv --normals` overrides it. The shipped
+EPICv2 panel is two arrays of one female cell line (GM12878): pass
+`--exclude chrX,chrY`, or a sex-matched `--normals`.
 
 There is no `sesame fetch` subcommand. A missing asset is an error naming the
 exact `yame fetch` to run — sesame never downloads and never prompts.
@@ -83,8 +87,8 @@ exact `yame fetch` to run — sesame never downloads and never prompts.
 ## Commands
 
   preprocess    IDAT -> .cg (+ qc.tsv); the main entry point
-  dml           per-probe OLS + t/F tests + BH -> TSV; --index <ordering>
-                by PATH (no --platform, no store lookup)
+  dml           per-probe OLS + t/F tests + BH -> TSV; a .cg needs
+                --platform (name or ordering path) for Probe_IDs
   cnv           log2 vs a normal panel, genome binning, CBS segmentation
   vcf           rs probes -> sites-only VCF (formatVCF)
   mliftover     .cg/.cm across arrays, or to/from a genome (hg38) by coordinate
@@ -201,7 +205,14 @@ Mask: a `.cm` is a bitset, one bit per ordering row, 1 = drop.
 - `vcf` uses RAW signal deliberately — channel inference would erase the
   Type-I channel-switch genotype.
 - `--index` is the deprecated old name for `--platform <ordering>`; every run
-  that uses it prints a deprecation notice.
+  that uses it prints a deprecation notice, except `dml`, where it is a silent
+  alias.
+- cinderplot does not consult the store: give genome tracks by full path,
+  `"$STORE/hg38/cytoband.tsv.gz"` with
+  `STORE=${YAME_DATA_HOME:-$HOME/.local/share/yame}`.
+- `deidentify` leaves every non-SNP bead byte-identical, so raw betas change
+  only on the SNPs; dye-bias correction and noob read whole-array statistics
+  and shift the rest by under 1e-3.
 - Exit codes: 0 ok, 1 everything else. Usage errors return 1 as well, so a
   caller cannot tell a bad flag from a failed sample.
 - `idat-dump --tsv` prints rows only; the `address mean sd nbeads` header
@@ -218,6 +229,7 @@ changing a prep step.
 
   make               # ./sesame
   make test          # golden ladder vs the R oracle (needs Rscript + sesame)
+  make truth RSCRIPT=Rscript   # regenerate tests/truth/ (R + test IDATs)
   make asan          # ASan + UBSan
   make fuzz-replay   # IDAT-parser corpus
   make registry      # regenerate src/registry.h from YAME/tools/registry

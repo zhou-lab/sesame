@@ -19,9 +19,12 @@ here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(dirname "$here")
 RSCRIPT=${RSCRIPT:-Rscript}
 
-## median of the numbers on stdin, so one slow run cannot set the result
-med() { sort -n | /usr/bin/awk '{v[NR]=$1} END{print (NR%2)? v[(NR+1)/2] :
-        (v[NR/2]+v[NR/2+1])/2}'; }
+## median of the numbers on stdin, so one slow run cannot set the result.
+## One line, no ternary: BSD awk (macOS) rejects a statement split over lines.
+med() {
+    sort -n |
+        awk '{v[NR]=$1} END{if (NR%2) print v[(NR+1)/2]; else print (v[NR/2]+v[NR/2+1])/2}'
+}
 
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 

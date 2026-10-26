@@ -185,8 +185,11 @@ static int usage_dml(void)
     yame_usage_text("stdout, one row per probe.");
 
     yame_usage_sec("Options:");
-    yame_usage_opt("--betas FILE", "a preprocess beta.cg (needs --index for Probe_IDs)");
-    yame_usage_cont("or a Probe_ID x sample matrix TSV");
+    yame_usage_opt("--betas FILE", "a preprocess beta.cg (needs --platform for");
+    yame_usage_cont("Probe_IDs) or a Probe_ID x sample matrix TSV");
+    yame_usage_opt("--platform P", "EPIC | EPICv2 | HM450 | MSA, or the path to an");
+    yame_usage_cont("ordering file. Supplies Probe_IDs for a .cg.");
+    yame_usage_opt("--index FILE", "ordering .tsv.gz (overrides --platform)");
     yame_usage_opt("--formula '~a+b'", "model over --meta columns (categoricals dummied)");
     yame_usage_opt("--meta FILE", "sample table; first column matches sample names");
     yame_usage_opt("--design FILE", "numeric design matrix (for interactions), in");
@@ -1118,7 +1121,8 @@ static void *dml_worker(void *arg)
 static int cmd_dml(int argc, char **argv)
 {
     const char *betapath = NULL, *metapath = NULL, *formula = NULL, *designpath = NULL;
-    const char *idxpath = NULL;
+    const char *idxpath = NULL, *platform = NULL;
+    char resolved[4096];
     int nthreads = 0, i, j, rc = 1;
     char **ids = NULL, **samp = NULL;
     double *betas = NULL;
@@ -1133,10 +1137,10 @@ static int cmd_dml(int argc, char **argv)
         else if (strcmp(argv[i], "--meta") == 0 && i+1 < argc) metapath = argv[++i];
         else if (strcmp(argv[i], "--formula") == 0 && i+1 < argc) formula = argv[++i];
         else if (strcmp(argv[i], "--design") == 0 && i+1 < argc) designpath = argv[++i];
-        else if (strcmp(argv[i], "--index") == 0 && i+1 < argc) {
-            idxpath = argv[++i];
-            sesame__index_deprecated();
-        }
+        /* dml only ever needed the ordering, so --index stays a plain alias
+         * of --platform <path> here, with no deprecation notice */
+        else if (strcmp(argv[i], "--index") == 0 && i+1 < argc) idxpath = argv[++i];
+        else if (strcmp(argv[i], "--platform") == 0 && i+1 < argc) platform = argv[++i];
         else if ((strcmp(argv[i], "--threads")==0||strcmp(argv[i],"-t")==0) && i+1<argc)
             nthreads = (int)strtol(argv[++i], NULL, 10);
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) { usage_dml(); return 0; }
@@ -1149,7 +1153,18 @@ static int cmd_dml(int argc, char **argv)
     { size_t bl = strlen(betapath);
       if (bl >= 3 && strcmp(betapath + bl - 3, ".cg") == 0) {   /* YAME beta.cg */
         double *smat = NULL; int32_t np = 0, ns = 0, s, p; sesame_index_t *ix;
-        if (!idxpath) { fprintf(stderr, "sesame: dml on a .cg needs --index (for probe IDs)\n"); return 1; }
+        /* --platform takes a name (looked up in the store) or an ordering
+         * path, as in every other subcommand; --index wins if both given */
+        if (!idxpath && sesame_platform_is_path(platform)) idxpath = platform;
+        if (!idxpath && platform) {
+            if (sesame_index_locate(platform, resolved, sizeof resolved) != 0) {
+                char help[1024];
+                sesame_index_missing_help(platform, help, sizeof help);
+                fprintf(stderr, "sesame: %s\n", help); return 1;
+            }
+            idxpath = resolved;
+        }
+        if (!idxpath) { fprintf(stderr, "sesame: dml on a .cg needs --platform (for probe IDs)\n"); return 1; }
         if (sesame_read_cg(betapath, &smat, &np, &ns, &samp, &e)) { fprintf(stderr, "sesame: %s\n", e.msg); return 1; }
         if (!(ix = sesame_index_open(idxpath, &e))) { fprintf(stderr, "sesame: %s\n", e.msg); free(smat); return 1; }
         if (sesame_index_nprobes(ix) != np) {

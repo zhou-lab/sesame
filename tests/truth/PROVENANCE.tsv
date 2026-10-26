@@ -1,8 +1,8 @@
-generated	2026-09-20T12:04:43Z
-store	/mnt/isilon/zhou_lab/projects/20191221_references/YAME
+generated	2026-10-22T19:06:04Z
+annotation	InfiniumAnnotation v8.5
 R	R version 4.6.0 (2026-04-24)
-sesame	1.29.5
+sesame	1.31.5
 sesameData	1.29.10
 BiocVersion	3.23.1
-sesame-cli	0.5
-yame	v1.51
+sesame-cli	2.3.1
+yame	v1.61

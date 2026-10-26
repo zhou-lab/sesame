@@ -31,11 +31,27 @@ command -v "$RSCRIPT" >/dev/null 2>&1 || { echo "make_truth: no $RSCRIPT" >&2; e
 
 mkdir -p "$truth"
 
-## Provenance: the four versions without which "matches R" means nothing.
+## The annotation release, as a tag rather than a path: the tag this build's
+## registry pins for the EPICv2 ordering, if the store's copy has its digest.
+annotation() {
+    reg="$root/src/registry.h"; f="$yhome/EPICv2/EPICv2.ordering.tsv.gz"
+    line=$(grep '"EPICv2/EPICv2.ordering.tsv.gz"' "$reg" 2>/dev/null | head -n 1)
+    tag=$(printf '%s\n' "$line" | sed -n 's/.*InfiniumAnnotation@\(v[0-9.]*\):.*/\1/p')
+    want=$(printf '%s\n' "$line" | grep -o '"[0-9a-f]\{64\}"' | tr -d '"')
+    have=$( (sha256sum "$f" 2>/dev/null || shasum -a 256 "$f" 2>/dev/null) |
+            cut -d' ' -f1)
+    if [ -n "$tag" ] && [ -n "$want" ] && [ "$want" = "$have" ]; then
+        echo "InfiniumAnnotation $tag"
+    else
+        echo "unknown (store EPICv2 ordering is not ${tag:-the pinned release})"
+    fi
+}
+
+## Provenance: the versions without which "matches R" means nothing.
 prov="$truth/PROVENANCE.tsv"
 {
   printf 'generated\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  printf 'store\t%s\n' "$yhome"
+  printf 'annotation\t%s\n' "$(annotation)"
   "$RSCRIPT" -e 'cat(sprintf("R\t%s\n", R.version.string));
      for (p in c("sesame","sesameData","BiocVersion"))
        cat(sprintf("%s\t%s\n", p, tryCatch(as.character(packageVersion(p)),

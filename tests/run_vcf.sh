@@ -2,8 +2,10 @@
 # vcf: validate SNP genotyping (sesame formatVCF) against R on real EPICv2 data.
 # GT (the call) and PVF (variant fraction) must match R exactly; GS (the quality
 # score) matches except in the deep tail, where R's dbinom is more precise than
-# the log-pmf here. Needs an EPICv2 ordering, the SNP annotation, an EPICv2 IDAT,
-# and Rscript with sesame; skips cleanly otherwise.
+# the log-pmf here. Needs an EPICv2 ordering, the SNP annotation and an EPICv2
+# IDAT; skips cleanly otherwise. With no usable R (no Rscript, or one without
+# sesame) it grades the same output against the frozen tests/truth/
+# vcf.EPICv2.tsv.gz instead, so the numbers are checked without R.
 set -eu
 
 ## The R oracle. Overridable because the binary is not called the same
@@ -24,7 +26,14 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 [ -x "$bin" ] || { echo "FAIL: $bin not built"; exit 1; }
-command -v "$RSCRIPT" >/dev/null 2>&1 || { echo "SKIP vcf: no Rscript"; exit 0; }
+truth="$here/truth/vcf.EPICv2.tsv.gz"
+oracle=R
+if ! command -v "$RSCRIPT" >/dev/null 2>&1 ||
+   ! "$RSCRIPT" -e 'quit(status = !requireNamespace("sesame", quietly = TRUE))' \
+       >/dev/null 2>&1; then
+    [ -f "$truth" ] || { echo "SKIP vcf: no usable $RSCRIPT and no $truth"; exit 0; }
+    oracle=truth
+fi
 
 plat=EPICv2
 ord="$store/$plat/$plat.ordering.tsv.gz"
@@ -51,6 +60,41 @@ print('Probe_ID\tGT\tGS\tPVF')
 for l in sys.stdin:
     p=l.rstrip().split('\t'); d=dict(kv.split('=',1) for kv in p[7].split(';') if '=' in kv)
     print(d['Probe_ID'],d['GT'],p[5],d['PVF'],sep='\t')" > "$work/c.tsv"
+
+## No R: grade against the frozen truth. Every row there is R's value, or
+## sesame's own where DIVERGENCES.md says why (src C:<code>), so the bar is
+## the one the R gate applies: the same probes, GT and PVF exact, GS within 1
+## on all but 0.1%.
+if [ "$oracle" = truth ]; then
+    python3 - "$work/c.tsv" "$truth" <<'PY' || { echo "passed 0, failed 1"; exit 1; }
+import gzip, sys
+def load(fn, op=open):
+    d = {}
+    with op(fn, "rt") as f:
+        next(f)
+        for l in f:
+            p = l.rstrip("\n").split("\t"); d[p[0]] = p[1:]
+    return d
+C = load(sys.argv[1]); T = load(sys.argv[2], gzip.open)
+if set(C) != set(T):
+    print(f"FAIL vcf vs truth: {len(set(C) - set(T))} probes not in the truth, "
+          f"{len(set(T) - set(C))} missing from the output")
+    sys.exit(1)
+gt = sum(C[k][0] != T[k][0] for k in T)
+pvf = max(abs(float(C[k][2]) - float(T[k][2])) for k in T)
+gs = sum(abs(int(C[k][1]) - int(T[k][1])) > 1 for k in T)
+nc = sum(T[k][3].startswith("C:") for k in T)
+n = len(T)
+if gt or pvf >= 1e-6 or gs > n * 0.001:
+    print(f"FAIL vcf vs truth: GT={gt} PVF={pvf:.1e} GS-off={gs}")
+    sys.exit(1)
+print(f"ok   vcf vs frozen truth: {n} probes ({nc} C-sourced), GT + PVF exact, "
+      f"GS off on {gs}")
+PY
+    echo
+    echo "passed 1, failed 0"
+    exit 0
+fi
 
 # R oracle
 "$RSCRIPT" "$here/compare_vcf.R" "$pfx" $plat "$snp" "$work/r.tsv" >/dev/null 2>&1
@@ -92,7 +136,7 @@ with gzip.open(sys.argv[3],'rt') as f:
         p=l.rstrip('\n').split('\t'); ocol[p[0]]=p[3]
 excl={k for k in common
       if len(R[k])>3 and R[k][3] and R[k][3]!='NA' and ocol.get(k) and R[k][3]!=ocol[k]}
-EXPECTED_EXCL=22          # EPICv2 v8.1 ordering vs sesameData 1.29.10, 2026-09-20
+EXPECTED_EXCL=22          # EPICv2 v8.1 (and v8.5) vs sesameData 1.29.10, 2026-09-20
 graded=common-excl
 
 gt_mis=0; pvf_max=0.0; gs_off=0

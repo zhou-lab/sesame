@@ -21,7 +21,7 @@ annotation.
 
 The frozen ground truth in `tests/truth/` is anchored on **sesame's own output
 against the store's annotation**, not on R's. The reason is the annotation
-rather than the code: the store carries InfiniumAnnotation v8.1, which is a
+rather than the code: the store carries InfiniumAnnotation v8.5, which is a
 newer generation than the copy inside `sesameData`, and where the two disagree
 it is the older one that is behind — visibly so in the control-probe names,
 where the store's `ctl_10609447_NEGATIVE` carries the control's type and
@@ -50,7 +50,7 @@ on every annotation release.
 **Why.** The out-of-band allele fraction of a Type-I probe is the share of
 signal in the *other* colour channel, so it depends on which channel the probe
 is assigned to. The two sides read different manifests: sesame reads the
-store's `EPICv2.ordering.tsv.gz` (InfiniumAnnotation v8.1), R reads the one
+store's `EPICv2.ordering.tsv.gz` (InfiniumAnnotation v8.5), R reads the one
 inside `sesameData` (1.29.10 when this was measured). Those two disagree about
 the colour channel of exactly these 22 probes — `G` in one, `R` in the other,
 all 22 of them. The formula is identical on both sides (`R/sesame.R:242`
@@ -111,7 +111,7 @@ frozen truth has to source those rows from somewhere.
 (EPIC: 0 versus 0.00243309, i.e. 1/411).
 
 **Why.** The two orderings disagree about these probes' **design type**, not
-merely their colour. The store's v8.1 ordering calls `cg07162498` Infinium-I
+merely their colour. The store's v8.5 ordering calls `cg07162498` Infinium-I
 red; `sesameData` calls it Infinium-II. A Type-I probe is read from two
 addresses in one channel, a Type-II probe from one address in both, so the two
 sides feed genuinely different intensities into the same ECDF. There is no
@@ -154,7 +154,7 @@ every one of them by exactly the same pair of values, 82/614 versus 81/613.
 
 **Why.** The two sides run the ECDF over negative-control pools of different
 size. `sesameData`'s HM450 control table has **614 NEGATIVE controls and no
-RESTORATION category at all**; the store's v8.1 ordering has **613 NEGATIVE
+RESTORATION category at all**; the store's v8.5 ordering has **613 NEGATIVE
 plus one RESTORATION**, at address 41636384. Both tables hold 850 controls, so
 one control has simply been relabelled: `sesameData` lists 41636384 as
 "Negative 604" (with the sentinel `Color_Channel = -99`), the store as
